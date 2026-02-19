@@ -1,0 +1,3500 @@
+// ============================================================================
+// PRISMA SCHEMA FOR UPLIFTING THE ROOT ARTISAN FARMERS DEVELOPMENT FOUNDATION
+// ============================================================================
+// 
+// This schema is fully integrated with the Technical Documentation flow:
+// - Member/Client Registration without OTP (Admin verification only)
+// - Phone number as primary identifier
+// - NIN photo upload for client verification
+// - Document proof photos for member verification
+// - Products, Services, Tools with pricing options
+// - Tool leasing and selling marketplace
+// - Certificate display (externally issued, uploaded as photos)
+// - Rating system (verified clients only)
+// - Transaction tracking (input-based, no payment processing)
+// - About page with leadership, sponsors, testimonials, events
+// - Admin portal with full verification and content management
+//
+// Version: 2.0
+// Date: June 2025
+// IT Number: 8552454
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// SECTION 1: ENUMERATIONS
+// ============================================================================
+// All enum types organized by functional area
+
+// -----------------------------------------------------------------------------
+// 1.1 USER AND AUTHENTICATION ENUMS
+// -----------------------------------------------------------------------------
+
+/// Type of user account in the system
+/// Aligns with Section 4 of Documentation: User Categories
+enum UserType {
+  MEMBER    // Farmers and Artisans
+  CLIENT    // Customers seeking products/services
+  ADMIN     // Foundation administrators
+}
+
+/// Verification status for user accounts
+/// Aligns with Section 7: User Registration and Verification Flow
+enum VerificationStatus {
+  PENDING           // Registration submitted, awaiting admin review
+  UNDER_REVIEW      // Admin has started reviewing
+  VERIFIED          // Admin approved the registration
+  REJECTED          // Admin rejected the registration
+  SUSPENDED         // Account suspended after verification
+  RESUBMITTED       // User resubmitted after rejection
+}
+
+/// Provider type for members - can be farmer, artisan, or both
+/// Aligns with Section 6.1: Member Profile Module
+enum ProviderType {
+  FARMER    // Agricultural production and farming
+  ARTISAN   // Skilled trades and craftsmanship
+  BOTH      // Dual provider - both farmer and artisan
+}
+
+/// Gender options for profiles
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+/// Types of documents uploaded for verification
+/// Aligns with Section 7.1: Member Registration Process
+enum VerificationDocumentType {
+  PROFILE_PHOTO               // Required profile photograph
+  DOCUMENT_PROOF_1            // Primary document proof (required)
+  DOCUMENT_PROOF_2            // Secondary document proof (optional)
+  DOCUMENT_PROOF_3            // Additional document proof (optional)
+  NIN_PHOTO                   // NIN photo for client verification
+  ID_CARD                     // National ID card
+  TRADE_ASSOCIATION_CARD      // Trade/professional association membership
+  BUSINESS_REGISTRATION       // Business registration document
+  UTILITY_BILL                // Utility bill for address verification
+  OTHER_DOCUMENT              // Any other valid identification
+}
+
+/// Status of individual verification documents
+enum DocumentVerificationStatus {
+  PENDING       // Awaiting admin review
+  APPROVED      // Document verified as authentic
+  REJECTED      // Document rejected (unclear, invalid, etc.)
+  RESUBMISSION_REQUIRED // Admin requests clearer image
+}
+
+// -----------------------------------------------------------------------------
+// 1.2 LISTING AND PRICING ENUMS
+// -----------------------------------------------------------------------------
+
+/// Pricing type options for products, services, and tools
+/// Aligns with Documentation requirement for price display options
+enum PricingType {
+  FIXED       // Fixed price displayed
+  NEGOTIABLE  // Price is negotiable, no fixed amount shown
+  BOTH        // Shows fixed price but open to negotiation
+}
+
+/// Availability status for products
+/// Aligns with Section 6.2: Product Listing Module
+enum ProductAvailability {
+  AVAILABLE       // Product is available for purchase
+  OUT_OF_STOCK    // Currently not available
+  SEASONAL        // Available only in certain seasons
+  LIMITED_STOCK   // Low quantity available
+  DISCONTINUED    // No longer offered
+}
+
+/// Availability status for services
+/// Aligns with Section 6.3: Service Listing Module
+enum ServiceAvailability {
+  AVAILABLE         // Service is available
+  FULLY_BOOKED      // Currently not taking new clients
+  BY_APPOINTMENT    // Available by appointment only
+  TEMPORARILY_UNAVAILABLE // Temporarily not available
+  DISCONTINUED      // No longer offered
+}
+
+/// Condition of tools listed for sale or lease
+/// Aligns with Section 6.4: Tool Marketplace Module
+enum ToolCondition {
+  NEW           // Brand new, unused
+  LIKE_NEW      // Used but in excellent condition
+  GOOD          // Normal wear, fully functional
+  FAIR          // Visible wear but functional
+  FOR_PARTS     // Not fully functional, for parts only
+}
+
+/// Purpose of tool listing - sale, lease, or both
+/// Aligns with Section 6.4: Tool Marketplace Module
+enum ToolListingPurpose {
+  FOR_SALE      // Tool is for sale only
+  FOR_LEASE     // Tool is for lease/rent only
+  BOTH          // Available for both sale and lease
+}
+
+/// Current availability status of tools
+enum ToolAvailabilityStatus {
+  AVAILABLE         // Tool is available
+  CURRENTLY_LEASED  // Currently leased to someone
+  SOLD              // Tool has been sold
+  RESERVED          // Reserved for someone
+  UNAVAILABLE       // Not currently available
+  UNDER_MAINTENANCE // Being repaired/maintained
+}
+
+/// Lease rate period for tool rentals
+enum LeaseRatePeriod {
+  PER_HOUR    // Hourly rate
+  PER_DAY     // Daily rate
+  PER_WEEK    // Weekly rate
+  PER_MONTH   // Monthly rate
+}
+
+/// Deposit requirement for tool leasing
+enum DepositRequirement {
+  REQUIRED     // Deposit is mandatory
+  NOT_REQUIRED // No deposit needed
+  NEGOTIABLE   // Deposit terms negotiable
+}
+
+// -----------------------------------------------------------------------------
+// 1.3 CERTIFICATE AND CREDENTIAL ENUMS
+// -----------------------------------------------------------------------------
+
+/// Types of certificates that can be uploaded
+/// Aligns with Section 6.6: Certificate Display Module
+/// Note: Certificates are issued externally and uploaded as photos
+enum CertificateType {
+  TRAINING_COMPLETION       // Completion of training program
+  PROFESSIONAL_CERTIFICATION // Professional body certification
+  TRADE_LICENSE             // License to practice trade
+  AWARD_RECOGNITION         // Award or recognition
+  MEMBERSHIP_CERTIFICATE    // Association membership
+  GOVERNMENT_CERTIFICATION  // Government-issued certification
+  SKILL_CERTIFICATION       // Skill-specific certification
+  HEALTH_SAFETY_CERT        // Health and safety certification
+  QUALITY_CERTIFICATION     // Quality assurance certification
+  OTHER                     // Other certificate types
+}
+
+/// Verification status of uploaded certificates
+enum CertificateVerificationStatus {
+  PENDING       // Awaiting admin review
+  VERIFIED      // Admin verified authenticity
+  UNVERIFIED    // Not yet verified (but displayed)
+  FLAGGED       // Flagged for review
+}
+
+// -----------------------------------------------------------------------------
+// 1.4 RATING AND REVIEW ENUMS
+// -----------------------------------------------------------------------------
+
+/// Category of what is being rated
+/// Aligns with Section 6.5: Rating and Review Module
+/// Note: Only verified clients can submit ratings
+enum RatingCategory {
+  PRODUCT_RATING    // Rating for a specific product
+  SERVICE_RATING    // Rating for a specific service
+  TOOL_LEASE_RATING // Rating for tool lease experience
+  OVERALL_MEMBER    // General rating for member
+}
+
+/// Status of rating/review
+enum RatingStatus {
+  ACTIVE    // Rating is visible
+  HIDDEN    // Hidden by admin
+  REPORTED  // Reported and under review
+  REMOVED   // Removed for policy violation
+}
+
+// -----------------------------------------------------------------------------
+// 1.5 TRANSACTION TRACKING ENUMS
+// -----------------------------------------------------------------------------
+
+/// Types of transactions tracked (input-based only)
+/// Aligns with Section 10.2: Transaction Tracking
+/// Note: Platform only tracks input, no payment processing
+enum TransactionType {
+  PRODUCT_SALE      // Sale of product
+  SERVICE_RENDERED  // Service provided
+  TOOL_LEASE        // Tool leased out
+  TOOL_SALE         // Tool sold
+}
+
+/// Status of tracked transaction
+enum TransactionStatus {
+  RECORDED      // Transaction recorded
+  COMPLETED     // Transaction completed
+  CANCELLED     // Transaction cancelled
+  DISPUTED      // Under dispute
+}
+
+// -----------------------------------------------------------------------------
+// 1.6 CATEGORY ENUMS
+// -----------------------------------------------------------------------------
+
+/// Types of categories in the system
+/// Aligns with Sections 6.1.2, 6.1.3, 6.2.2, 6.3.2, 6.4.2
+enum CategoryType {
+  FARMER_SPECIALIZATION       // Farming type categories (FRM-XX)
+  ARTISAN_SPECIALIZATION      // Artisan trade categories (ART-XX)
+  PRODUCT_AGRICULTURAL        // Agricultural products (PRD-AXX)
+  PRODUCT_ARTISAN             // Artisan products (PRD-RXX)
+  SERVICE_FARMING             // Farming services (SRV-FXX)
+  SERVICE_ARTISAN             // Artisan services (SRV-AXX)
+  TOOL_FARMING                // Farming tools (TL-FXX)
+  TOOL_ARTISAN                // Artisan tools (TL-AXX)
+}
+
+// -----------------------------------------------------------------------------
+// 1.7 CONTENT MANAGEMENT ENUMS
+// -----------------------------------------------------------------------------
+
+/// Sponsor/Partner relationship type
+/// Aligns with Section 14: Sponsors and Partners Directory
+enum SponsorPartnerType {
+  SPONSOR       // Financial support
+  PARTNER       // Collaboration/Technical support
+  BOTH          // Both sponsor and partner
+}
+
+/// Categories of sponsors and partners
+/// Aligns with Section 14.1: Sponsors and Partners Data Structure
+enum SponsorPartnerCategory {
+  GOVERNMENT_AGENCY                 // Federal, State, Local Government
+  NON_GOVERNMENTAL_ORGANIZATION     // Local and international NGOs
+  CORPORATE_PRIVATE_SECTOR          // Businesses and companies
+  INTERNATIONAL_ORGANIZATION        // UN agencies, foreign partners
+  EDUCATIONAL_INSTITUTION           // Universities, polytechnics
+  TRADITIONAL_INSTITUTION           // Traditional rulers and bodies
+  FINANCIAL_INSTITUTION             // Banks, microfinance
+  INDIVIDUAL_DONOR                  // Individual philanthropists
+  RELIGIOUS_ORGANIZATION            // Faith-based organizations
+  MEDIA_ORGANIZATION                // Media partners
+  OTHER                             // Other categories
+}
+
+/// Categories of testimonials
+/// Aligns with Section 15.1: Testimonial Categories
+enum TestimonialCategory {
+  MEMBER_SUCCESS_STORY    // Success stories from members
+  PARTNER_FEEDBACK        // Feedback from partners/sponsors
+  COMMUNITY_IMPACT        // Community impact stories
+  CLIENT_TESTIMONIAL      // Client/customer feedback
+  OFFICIAL_RECOGNITION    // Government/official recognition
+  YOUTH_EMPOWERMENT       // Youth success stories
+  OTHER                   // Other testimonials
+}
+
+/// Types of events organized
+/// Aligns with Section 16.1: Event Types and Categories
+enum EventType {
+  ANNUAL_GENERAL_MEETING        // AGM as per constitution
+  BOARD_OF_TRUSTEES_MEETING     // BOT meetings
+  EXECUTIVE_MEETING             // Executive council meetings
+  SPECIAL_MEETING               // Special meetings
+  TRAINING_WORKSHOP             // Training and workshops
+  SEMINAR_CONFERENCE            // Seminars and conferences
+  COMMUNITY_OUTREACH            // Community engagement
+  EXHIBITION_FAIR               // Product/service exhibitions
+  AWARD_CEREMONY                // Recognition events
+  PARTNERSHIP_SIGNING           // MOU signings
+  FUNDRAISING_EVENT             // Fundraising activities
+  CULTURAL_EVENT                // Cultural celebrations
+  LAUNCH_INAUGURATION           // Program/facility launches
+  STAKEHOLDER_MEETING           // Stakeholder engagements
+  OTHER                         // Other events
+}
+
+/// Status of events
+enum EventStatus {
+  DRAFT         // Not yet published
+  UPCOMING      // Published, scheduled for future
+  ONGOING       // Currently happening
+  COMPLETED     // Event has concluded
+  CANCELLED     // Event was cancelled
+  POSTPONED     // Event postponed
+}
+
+/// Types of foundation documents
+/// Aligns with Section 13.2: Foundation Documents
+enum FoundationDocumentType {
+  CAC_CERTIFICATE           // CAC registration certificate
+  CONSTITUTION              // Incorporated Trustee Constitution
+  STATUS_REPORT             // CAC Status Report
+  ANNUAL_REPORT             // Yearly reports
+  FINANCIAL_STATEMENT       // Audited financial statements
+  AWARD_CERTIFICATE         // Awards received
+  PARTNERSHIP_AGREEMENT     // MOU documents
+  ACCREDITATION             // Accreditation documents
+  OTHER                     // Other documents
+}
+
+/// About page content sections
+/// Aligns with Section 13.1: Complete About Page Layout
+enum AboutSectionKey {
+  MISSION_STATEMENT
+  VISION_STATEMENT
+  OVERVIEW
+  HISTORY
+  CORE_VALUES
+  WHO_WE_ARE
+  WHAT_WE_DO
+  OUR_IMPACT
+  CUSTOM
+}
+
+// -----------------------------------------------------------------------------
+// 1.8 ADMIN AND SYSTEM ENUMS
+// -----------------------------------------------------------------------------
+
+/// Admin role types with different permissions
+/// Aligns with Section 8.6: Admin User Management
+enum AdminRole {
+  SUPER_ADMIN           // Full access to all features
+  VERIFICATION_ADMIN    // Can verify/reject users
+  CONTENT_ADMIN         // Can manage content
+  REPORT_ADMIN          // Can view reports only
+}
+
+/// Types of admin actions for audit logging
+/// Aligns with Section 8: Admin Portal Specifications
+enum AdminActionType {
+  // Authentication actions
+  LOGIN
+  LOGOUT
+  PASSWORD_CHANGED
+  
+  // User verification actions
+  MEMBER_VERIFICATION_APPROVED
+  MEMBER_VERIFICATION_REJECTED
+  MEMBER_RESUBMISSION_REQUESTED
+  CLIENT_VERIFICATION_APPROVED
+  CLIENT_VERIFICATION_REJECTED
+  CLIENT_RESUBMISSION_REQUESTED
+  
+  // User management actions
+  USER_SUSPENDED
+  USER_REACTIVATED
+  USER_PASSWORD_RESET
+  
+  // Content management actions
+  ABOUT_CONTENT_UPDATED
+  LEADERSHIP_PROFILE_CREATED
+  LEADERSHIP_PROFILE_UPDATED
+  LEADERSHIP_PROFILE_DELETED
+  SPONSOR_CREATED
+  SPONSOR_UPDATED
+  SPONSOR_DELETED
+  TESTIMONIAL_CREATED
+  TESTIMONIAL_UPDATED
+  TESTIMONIAL_DELETED
+  TESTIMONIAL_APPROVED
+  EVENT_CREATED
+  EVENT_UPDATED
+  EVENT_DELETED
+  EVENT_PUBLISHED
+  DOCUMENT_UPLOADED
+  DOCUMENT_DELETED
+  
+  // Category management
+  CATEGORY_CREATED
+  CATEGORY_UPDATED
+  CATEGORY_DELETED
+  
+  // Admin management (Super Admin only)
+  ADMIN_CREATED
+  ADMIN_UPDATED
+  ADMIN_DEACTIVATED
+  ADMIN_REACTIVATED
+  
+  // System actions
+  SETTINGS_CHANGED
+  DATA_EXPORTED
+  DATA_IMPORTED
+  SYSTEM_BACKUP
+  
+  // Other
+  OTHER
+}
+
+/// Password reset request status
+/// Aligns with Section 7.4: Password Recovery Process
+/// Note: No OTP - Admin handles password resets
+enum PasswordResetStatus {
+  PENDING     // Request submitted, awaiting admin
+  IN_PROGRESS // Admin is processing
+  COMPLETED   // Password has been reset
+  REJECTED    // Request rejected
+  EXPIRED     // Request expired
+}
+
+/// Notification types
+enum NotificationType {
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  RESUBMISSION_REQUIRED
+  PASSWORD_RESET_READY
+  NEW_RATING_RECEIVED
+  SYSTEM_ANNOUNCEMENT
+  EVENT_REMINDER
+  PROFILE_VIEW_MILESTONE
+  OTHER
+}
+
+/// Notification status
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+  DELETED
+}
+
+/// External link types
+enum ExternalLinkType {
+  VIDEO_LINK          // YouTube, etc.
+  DOCUMENT_LINK       // Google Drive, etc.
+  WEBSITE_LINK        // External website
+  SOCIAL_MEDIA_LINK   // Social media profiles
+  PORTFOLIO_LINK      // Portfolio websites
+  OTHER               // Other links
+}
+
+// ============================================================================
+// SECTION 2: CORE USER MODELS
+// ============================================================================
+// These models handle user authentication, registration, and verification
+// Aligns with Section 7: User Registration and Verification Flow
+
+// -----------------------------------------------------------------------------
+// 2.1 BASE USER MODEL
+// -----------------------------------------------------------------------------
+
+/// Main user account model - serves as base for members, clients, and admins
+/// Phone number is the primary identifier for login (no OTP verification)
+/// Verification is done through Admin Portal only
+model User {
+  id                    String              @id @default(uuid()) @db.Uuid
+  
+  // Authentication credentials
+  // Phone number is used for login - aligns with requirement for phone-based login
+  phoneNumber           String              @unique @map("phone_number") @db.VarChar(15)
+  countryCode           String              @default("+234") @map("country_code") @db.VarChar(5)
+  passwordHash          String              @map("password_hash") @db.VarChar(255)
+  
+  // User type determines which profile table to use
+  userType              UserType            @map("user_type")
+  
+  // Basic information
+  fullName              String              @map("full_name") @db.VarChar(150)
+  email                 String?             @db.VarChar(150)
+  
+  // Verification workflow
+  // Aligns with Section 7: Admin handles all verifications
+  verificationStatus    VerificationStatus  @default(PENDING) @map("verification_status")
+  verificationSubmittedAt DateTime?         @map("verification_submitted_at")
+  verificationStartedAt DateTime?           @map("verification_started_at")
+  verifiedAt            DateTime?           @map("verified_at")
+  verifiedByAdminId     String?             @map("verified_by_admin_id") @db.Uuid
+  rejectionReason       String?             @map("rejection_reason") @db.Text
+  rejectionDetails      String?             @map("rejection_details") @db.Text
+  resubmissionCount     Int                 @default(0) @map("resubmission_count")
+  lastResubmittedAt     DateTime?           @map("last_resubmitted_at")
+  
+  // Account status
+  isActive              Boolean             @default(true) @map("is_active")
+  isEmailVerified       Boolean             @default(false) @map("is_email_verified")
+  suspendedAt           DateTime?           @map("suspended_at")
+  suspendedReason       String?             @map("suspended_reason") @db.Text
+  suspendedByAdminId    String?             @map("suspended_by_admin_id") @db.Uuid
+  
+  // Login tracking
+  lastLoginAt           DateTime?           @map("last_login_at")
+  lastLoginIp           String?             @map("last_login_ip") @db.VarChar(45)
+  loginCount            Int                 @default(0) @map("login_count")
+  failedLoginAttempts   Int                 @default(0) @map("failed_login_attempts")
+  lockedUntil           DateTime?           @map("locked_until")
+  
+  // Timestamps
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Admin who verified this user
+  verifiedByAdmin       AdminUser?          @relation("UserVerifiedBy", fields: [verifiedByAdminId], references: [id])
+  suspendedByAdmin      AdminUser?          @relation("UserSuspendedBy", fields: [suspendedByAdminId], references: [id])
+  
+  // Profile relations (one-to-one based on userType)
+  memberProfile         MemberProfile?
+  clientProfile         ClientProfile?
+  
+  // Documents uploaded for verification
+  verificationDocuments VerificationDocument[]
+  
+  // Sessions
+  sessions              UserSession[]
+  
+  // Notifications
+  notifications         Notification[]
+  
+  // Password reset requests
+  passwordResetRequests PasswordResetRequest[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([phoneNumber])
+  @@index([userType])
+  @@index([verificationStatus])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([verifiedByAdminId])
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// 2.2 USER SESSION MODEL
+// -----------------------------------------------------------------------------
+
+/// User session management for authentication
+model UserSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  
+  // Session token
+  token           String    @unique @db.VarChar(500)
+  refreshToken    String?   @map("refresh_token") @db.VarChar(500)
+  
+  // Device and location info
+  deviceInfo      String?   @map("device_info") @db.VarChar(255)
+  deviceType      String?   @map("device_type") @db.VarChar(50) // mobile, tablet, desktop
+  osInfo          String?   @map("os_info") @db.VarChar(100)
+  browserInfo     String?   @map("browser_info") @db.VarChar(100)
+  ipAddress       String?   @map("ip_address") @db.VarChar(45)
+  location        String?   @db.VarChar(255)
+  
+  // Status
+  isActive        Boolean   @default(true) @map("is_active")
+  
+  // Timestamps
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastUsedAt      DateTime  @default(now()) @map("last_used_at")
+  terminatedAt    DateTime? @map("terminated_at")
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// -----------------------------------------------------------------------------
+// 2.3 VERIFICATION DOCUMENT MODEL
+// -----------------------------------------------------------------------------
+
+/// Documents uploaded by users during registration for verification
+/// Aligns with Section 7.1 and 7.2: Registration flows require document/NIN uploads
+model VerificationDocument {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  userId                String                       @map("user_id") @db.Uuid
+  
+  // Document information
+  documentType          VerificationDocumentType     @map("document_type")
+  
+  // File information
+  fileUrl               String                       @map("file_url") @db.VarChar(500)
+  thumbnailUrl          String?                      @map("thumbnail_url") @db.VarChar(500)
+  originalFileName      String?                      @map("original_file_name") @db.VarChar(255)
+  storedFileName        String?                      @map("stored_file_name") @db.VarChar(255)
+  fileSize              Int?                         @map("file_size") // bytes
+  mimeType              String?                      @map("mime_type") @db.VarChar(100)
+  
+  // Image dimensions (for photo validation)
+  width                 Int?
+  height                Int?
+  
+  // Document description
+  description           String?                      @db.Text
+  
+  // Verification status
+  verificationStatus    DocumentVerificationStatus   @default(PENDING) @map("verification_status")
+  verifiedAt            DateTime?                    @map("verified_at")
+  verifiedByAdminId     String?                      @map("verified_by_admin_id") @db.Uuid
+  rejectionReason       String?                      @map("rejection_reason") @db.Text
+  
+  // Timestamps
+  uploadedAt            DateTime                     @default(now()) @map("uploaded_at")
+  updatedAt             DateTime                     @updatedAt @map("updated_at")
+  
+  // Relations
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifiedByAdmin       AdminUser?                   @relation(fields: [verifiedByAdminId], references: [id])
+  
+  @@index([userId])
+  @@index([documentType])
+  @@index([verificationStatus])
+  @@map("verification_documents")
+}
+
+// -----------------------------------------------------------------------------
+// 2.4 PASSWORD RESET REQUEST MODEL
+// -----------------------------------------------------------------------------
+
+/// Password reset requests - processed by admin (no OTP)
+/// Aligns with Section 7.4: Password Recovery Process
+model PasswordResetRequest {
+  id                  String              @id @default(uuid()) @db.Uuid
+  userId              String              @map("user_id") @db.Uuid
+  
+  // Request details
+  phoneNumber         String              @map("phone_number") @db.VarChar(15)
+  requestReason       String?             @map("request_reason") @db.Text
+  
+  // Processing status
+  status              PasswordResetStatus @default(PENDING)
+  
+  // Admin processing
+  processedByAdminId  String?             @map("processed_by_admin_id") @db.Uuid
+  processedAt         DateTime?           @map("processed_at")
+  adminNotes          String?             @map("admin_notes") @db.Text
+  
+  // Temporary password (hashed) - user must change on next login
+  temporaryPasswordHash String?           @map("temporary_password_hash") @db.VarChar(255)
+  passwordChangedAt   DateTime?           @map("password_changed_at")
+  
+  // Expiry
+  expiresAt           DateTime            @map("expires_at")
+  
+  // Timestamps
+  createdAt           DateTime            @default(now()) @map("created_at")
+  
+  // Relations
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedByAdmin    AdminUser?          @relation(fields: [processedByAdminId], references: [id])
+  
+  @@index([userId])
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@map("password_reset_requests")
+}
+
+// -----------------------------------------------------------------------------
+// 2.5 NOTIFICATION MODEL
+// -----------------------------------------------------------------------------
+
+/// Notifications for users
+model Notification {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  
+  // Notification content
+  type            NotificationType
+  title           String              @db.VarChar(200)
+  message         String              @db.Text
+  
+  // Additional data (JSON)
+  data            Json?
+  
+  // Reference to related entity
+  relatedEntityType String?           @map("related_entity_type") @db.VarChar(50)
+  relatedEntityId String?             @map("related_entity_id") @db.Uuid
+  
+  // Status
+  status          NotificationStatus  @default(UNREAD)
+  readAt          DateTime?           @map("read_at")
+  
+  // Timestamps
+  createdAt       DateTime            @default(now()) @map("created_at")
+  
+  // Relations
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// SECTION 3: MEMBER MODELS
+// ============================================================================
+// Models for farmers and artisans (members)
+// Aligns with Section 6.1: Member Profile Module
+
+// -----------------------------------------------------------------------------
+// 3.1 MEMBER PROFILE MODEL
+// -----------------------------------------------------------------------------
+
+/// Extended profile for members (farmers and artisans)
+/// Aligns with Section 6.1.1: Profile Information Structure
+model MemberProfile {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @unique @map("user_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BASIC INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Provider type: Farmer, Artisan, or Both
+  providerType          ProviderType  @map("provider_type")
+  
+  // Profile photo (publicly visible)
+  profilePhotoUrl       String?       @map("profile_photo_url") @db.VarChar(500)
+  profilePhotoThumbnail String?       @map("profile_photo_thumbnail") @db.VarChar(500)
+  
+  // Bio/description
+  bio                   String?       @db.Text
+  tagline               String?       @db.VarChar(200) // Short description
+  
+  // Personal info
+  dateOfBirth           DateTime?     @map("date_of_birth") @db.Date
+  gender                Gender?
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOCATION INFORMATION
+  // Publicly visible to allow clients to contact members
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  address               String        @db.Text
+  landmark              String?       @db.VarChar(255)
+  localGovernmentArea   String        @map("local_government_area") @db.VarChar(100)
+  state                 String        @db.VarChar(50)
+  country               String        @default("Nigeria") @db.VarChar(50)
+  postalCode            String?       @map("postal_code") @db.VarChar(20)
+  
+  // GPS coordinates (optional)
+  latitude              Decimal?      @db.Decimal(10, 8)
+  longitude             Decimal?      @db.Decimal(11, 8)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXPERIENCE
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  yearsOfExperience     Int?          @map("years_of_experience")
+  startedPracticingYear Int?          @map("started_practicing_year")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATISTICS (Denormalized for performance)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Rating statistics
+  averageRating         Decimal       @default(0) @map("average_rating") @db.Decimal(3, 2)
+  totalRatings          Int           @default(0) @map("total_ratings")
+  totalReviews          Int           @default(0) @map("total_reviews")
+  
+  // Rating breakdown
+  fiveStarCount         Int           @default(0) @map("five_star_count")
+  fourStarCount         Int           @default(0) @map("four_star_count")
+  threeStarCount        Int           @default(0) @map("three_star_count")
+  twoStarCount          Int           @default(0) @map("two_star_count")
+  oneStarCount          Int           @default(0) @map("one_star_count")
+  
+  // Listing counts
+  totalProducts         Int           @default(0) @map("total_products")
+  activeProducts        Int           @default(0) @map("active_products")
+  totalServices         Int           @default(0) @map("total_services")
+  activeServices        Int           @default(0) @map("active_services")
+  totalTools            Int           @default(0) @map("total_tools")
+  activeTools           Int           @default(0) @map("active_tools")
+  totalCertificates     Int           @default(0) @map("total_certificates")
+  
+  // Engagement statistics
+  profileViewCount      Int           @default(0) @map("profile_view_count")
+  totalTransactions     Int           @default(0) @map("total_transactions")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROFILE SETTINGS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isProfileComplete     Boolean       @default(false) @map("is_profile_complete")
+  profileCompleteness   Int           @default(0) @map("profile_completeness") // Percentage
+  isFeatured            Boolean       @default(false) @map("is_featured")
+  featuredUntil         DateTime?     @map("featured_until")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Specializations (skills and expertise areas)
+  specializations       MemberSpecialization[]
+  
+  // Listings
+  products              Product[]
+  services              Service[]
+  tools                 Tool[]
+  
+  // Certificates
+  certificates          Certificate[]
+  
+  // Ratings received from clients
+  ratingsReceived       Rating[]      @relation("MemberRatingsReceived")
+  
+  // Transaction tracking
+  transactions          Transaction[]
+  
+  // External links (videos, documents, portfolio)
+  externalLinks         MemberExternalLink[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([providerType])
+  @@index([localGovernmentArea])
+  @@index([state])
+  @@index([averageRating])
+  @@index([profileViewCount])
+  @@index([isProfileComplete])
+  @@index([isFeatured])
+  @@index([createdAt])
+  @@map("member_profiles")
+}
+
+// -----------------------------------------------------------------------------
+// 3.2 MEMBER SPECIALIZATION MODEL
+// -----------------------------------------------------------------------------
+
+/// Specializations for members - their areas of expertise
+/// Aligns with Section 6.1.2 (Artisan Categories) and 6.1.3 (Farmer Categories)
+model MemberSpecialization {
+  id                    String        @id @default(uuid()) @db.Uuid
+  memberId              String        @map("member_id") @db.Uuid
+  
+  // Type of specialization
+  specializationType    ProviderType  @map("specialization_type") // FARMER or ARTISAN
+  
+  // Category reference
+  categoryId            String        @map("category_id") @db.Uuid
+  
+  // Specific skills within this category
+  specificSkills        String[]      @map("specific_skills")
+  
+  // Additional details
+  description           String?       @db.Text
+  experienceYears       Int?          @map("experience_years")
+  
+  // Is this the primary specialization?
+  isPrimary             Boolean       @default(false) @map("is_primary")
+  
+  // Display order
+  displayOrder          Int           @default(0) @map("display_order")
+  
+  // Timestamps
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  
+  // Relations
+  member                MemberProfile @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category              Category      @relation(fields: [categoryId], references: [id])
+  
+  @@unique([memberId, categoryId])
+  @@index([memberId])
+  @@index([specializationType])
+  @@index([categoryId])
+  @@index([isPrimary])
+  @@map("member_specializations")
+}
+
+// -----------------------------------------------------------------------------
+// 3.3 MEMBER EXTERNAL LINK MODEL
+// -----------------------------------------------------------------------------
+
+/// External links for member profiles (videos, documents, portfolio)
+/// Aligns with requirement for external document/video links
+model MemberExternalLink {
+  id              String            @id @default(uuid()) @db.Uuid
+  memberId        String            @map("member_id") @db.Uuid
+  
+  // Link information
+  linkType        ExternalLinkType  @map("link_type")
+  url             String            @db.VarChar(1000)
+  title           String?           @db.VarChar(200)
+  description     String?           @db.Text
+  
+  // Display settings
+  displayOrder    Int               @default(0) @map("display_order")
+  isActive        Boolean           @default(true) @map("is_active")
+  
+  // Click tracking
+  clickCount      Int               @default(0) @map("click_count")
+  
+  // Timestamps
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  
+  // Relations
+  member          MemberProfile     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  @@index([memberId])
+  @@index([linkType])
+  @@index([isActive])
+  @@map("member_external_links")
+}
+
+// ============================================================================
+// SECTION 4: CLIENT MODELS
+// ============================================================================
+// Models for clients/customers
+// Aligns with Section 7.2: Client Registration Process
+
+// -----------------------------------------------------------------------------
+// 4.1 CLIENT PROFILE MODEL
+// -----------------------------------------------------------------------------
+
+/// Extended profile for clients
+/// Clients must upload NIN photo for verification before they can rate
+model ClientProfile {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  
+  // Location information
+  address             String?   @db.Text
+  localGovernmentArea String?   @map("local_government_area") @db.VarChar(100)
+  state               String?   @db.VarChar(50)
+  country             String    @default("Nigeria") @db.VarChar(50)
+  
+  // NIN verification
+  // Aligns with Section 7.2: Client must upload NIN photo for verification
+  ninPhotoUrl         String?   @map("nin_photo_url") @db.VarChar(500)
+  ninPhotoUploadedAt  DateTime? @map("nin_photo_uploaded_at")
+  
+  // Statistics
+  totalRatingsGiven   Int       @default(0) @map("total_ratings_given")
+  totalReviewsWritten Int       @default(0) @map("total_reviews_written")
+  
+  // Preferences
+  preferredCategories String[]  @map("preferred_categories")
+  preferredLocations  String[]  @map("preferred_locations")
+  
+  // Timestamps
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Ratings given to members
+  ratingsGiven        Rating[]  @relation("ClientRatingsGiven")
+  
+  @@index([state])
+  @@index([localGovernmentArea])
+  @@map("client_profiles")
+}
+
+// ============================================================================
+// SECTION 5: CATEGORY MODEL
+// ============================================================================
+// Hierarchical categories for products, services, tools, and specializations
+// Aligns with Sections 6.1.2, 6.1.3, 6.2.2, 6.3.2, 6.4.2
+
+model Category {
+  id                String        @id @default(uuid()) @db.Uuid
+  
+  // Category code (e.g., FRM-01, ART-01, PRD-A01)
+  categoryCode      String        @unique @map("category_code") @db.VarChar(15)
+  
+  // Category type
+  categoryType      CategoryType  @map("category_type")
+  
+  // Category name and description
+  name              String        @db.VarChar(150)
+  description       String?       @db.Text
+  
+  // Hierarchy support
+  parentId          String?       @map("parent_id") @db.Uuid
+  level             Int           @default(0) // 0 = root, 1 = child, etc.
+  path              String?       @db.VarChar(500) // Materialized path for efficient queries
+  
+  // Icon and visual
+  iconUrl           String?       @map("icon_url") @db.VarChar(500)
+  iconName          String?       @map("icon_name") @db.VarChar(50)
+  colorCode         String?       @map("color_code") @db.VarChar(7) // Hex color
+  
+  // Example items (for guidance)
+  examples          String[]
+  
+  // Status and display
+  displayOrder      Int           @default(0) @map("display_order")
+  isActive          Boolean       @default(true) @map("is_active")
+  isFeatured        Boolean       @default(false) @map("is_featured")
+  
+  // Usage statistics
+  usageCount        Int           @default(0) @map("usage_count")
+  
+  // Timestamps
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  
+  // Self-relation for hierarchy
+  parent            Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children          Category[]    @relation("CategoryHierarchy")
+  
+  // Relations to items using this category
+  memberSpecializations MemberSpecialization[]
+  products          Product[]
+  services          Service[]
+  tools             Tool[]
+  
+  @@index([categoryType])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([displayOrder])
+  @@index([level])
+  @@map("categories")
+}
+
+// ============================================================================
+// SECTION 6: PRODUCT MODELS
+// ============================================================================
+// Products listed by members
+// Aligns with Section 6.2: Product Listing Module
+
+// -----------------------------------------------------------------------------
+// 6.1 PRODUCT MODEL
+// -----------------------------------------------------------------------------
+
+/// Products offered by members for sale
+/// Aligns with Section 6.2.1: Product Information Structure
+model Product {
+  id                    String                @id @default(uuid()) @db.Uuid
+  memberId              String                @map("member_id") @db.Uuid
+  categoryId            String                @map("category_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BASIC INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  name                  String                @db.VarChar(200)
+  description           String                @db.Text
+  shortDescription      String?               @map("short_description") @db.VarChar(300)
+  
+  // Tags for search
+  tags                  String[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // UNITS AND QUANTITIES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  unitOfMeasure         String                @map("unit_of_measure") @db.VarChar(50) // kg, pieces, bags, etc.
+  minimumOrderQuantity  Int?                  @map("minimum_order_quantity")
+  maximumOrderQuantity  Int?                  @map("maximum_order_quantity")
+  availableQuantity     Int?                  @map("available_quantity")
+  stockKeepingUnit      String?               @map("stock_keeping_unit") @db.VarChar(50)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PRICING
+  // Aligns with requirement for Fixed/Negotiable/Both options
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  pricingType           PricingType           @map("pricing_type")
+  priceAmount           Decimal?              @map("price_amount") @db.Decimal(12, 2)
+  pricePerUnit          String?               @map("price_per_unit") @db.VarChar(50) // "per kg", "per bag", etc.
+  currency              String                @default("NGN") @db.VarChar(3)
+  
+  // Price display text (e.g., "₦5,000 per bag" or "Negotiable" or "₦5,000 per bag (Negotiable)")
+  priceDisplayText      String?               @map("price_display_text") @db.VarChar(100)
+  
+  // Bulk pricing (optional)
+  bulkPriceAmount       Decimal?              @map("bulk_price_amount") @db.Decimal(12, 2)
+  bulkMinimumQuantity   Int?                  @map("bulk_minimum_quantity")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // AVAILABILITY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  availability          ProductAvailability   @default(AVAILABLE)
+  seasonalInfo          String?               @map("seasonal_info") @db.VarChar(255)
+  seasonStartMonth      Int?                  @map("season_start_month") // 1-12
+  seasonEndMonth        Int?                  @map("season_end_month") // 1-12
+  leadTimeDays          Int?                  @map("lead_time_days") // Days to prepare
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXTERNAL LINKS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  externalVideoLink     String?               @map("external_video_link") @db.VarChar(1000)
+  externalDocumentLink  String?               @map("external_document_link") @db.VarChar(1000)
+  externalReferenceLink String?               @map("external_reference_link") @db.VarChar(1000)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATISTICS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  viewCount             Int                   @default(0) @map("view_count")
+  averageRating         Decimal               @default(0) @map("average_rating") @db.Decimal(3, 2)
+  totalRatings          Int                   @default(0) @map("total_ratings")
+  totalReviews          Int                   @default(0) @map("total_reviews")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS AND DISPLAY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isActive              Boolean               @default(true) @map("is_active")
+  isFeatured            Boolean               @default(false) @map("is_featured")
+  isApproved            Boolean               @default(true) @map("is_approved") // Admin approval if needed
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  publishedAt           DateTime?             @map("published_at")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  member                MemberProfile         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category              Category              @relation(fields: [categoryId], references: [id])
+  images                ProductImage[]
+  ratings               Rating[]
+  transactions          Transaction[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([memberId])
+  @@index([categoryId])
+  @@index([pricingType])
+  @@index([availability])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([averageRating])
+  @@index([viewCount])
+  @@index([createdAt])
+  @@index([name])
+  @@map("products")
+}
+
+// -----------------------------------------------------------------------------
+// 6.2 PRODUCT IMAGE MODEL
+// -----------------------------------------------------------------------------
+
+/// Images for products
+model ProductImage {
+  id              String    @id @default(uuid()) @db.Uuid
+  productId       String    @map("product_id") @db.Uuid
+  
+  // Image URLs
+  imageUrl        String    @map("image_url") @db.VarChar(500)
+  thumbnailUrl    String?   @map("thumbnail_url") @db.VarChar(500)
+  mediumUrl       String?   @map("medium_url") @db.VarChar(500)
+  
+  // Image metadata
+  altText         String?   @map("alt_text") @db.VarChar(200)
+  caption         String?   @db.VarChar(255)
+  originalFileName String?  @map("original_file_name") @db.VarChar(255)
+  
+  // File info
+  fileSize        Int?      @map("file_size") // bytes
+  mimeType        String?   @map("mime_type") @db.VarChar(100)
+  width           Int?
+  height          Int?
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+  @@index([isPrimary])
+  @@index([displayOrder])
+  @@map("product_images")
+}
+
+// ============================================================================
+// SECTION 7: SERVICE MODELS
+// ============================================================================
+// Services offered by members
+// Aligns with Section 6.3: Service Listing Module
+
+// -----------------------------------------------------------------------------
+// 7.1 SERVICE MODEL
+// -----------------------------------------------------------------------------
+
+/// Services offered by members
+/// Aligns with Section 6.3.1: Service Information Structure
+model Service {
+  id                    String                @id @default(uuid()) @db.Uuid
+  memberId              String                @map("member_id") @db.Uuid
+  categoryId            String                @map("category_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BASIC INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  name                  String                @db.VarChar(200)
+  description           String                @db.Text
+  shortDescription      String?               @map("short_description") @db.VarChar(300)
+  
+  // Tags for search
+  tags                  String[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // SERVICE DETAILS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Service area coverage
+  serviceArea           String?               @map("service_area") @db.Text
+  serviceRadius         Int?                  @map("service_radius") // kilometers
+  servicesLocations     String[]              @map("services_locations") // Specific LGAs/areas
+  
+  // Duration
+  estimatedDuration     String?               @map("estimated_duration") @db.VarChar(100)
+  minimumDurationHours  Decimal?              @map("minimum_duration_hours") @db.Decimal(5, 2)
+  maximumDurationDays   Int?                  @map("maximum_duration_days")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PRICING
+  // Aligns with requirement for Fixed/Negotiable/Both options
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  pricingType           PricingType           @map("pricing_type")
+  startingPrice         Decimal?              @map("starting_price") @db.Decimal(12, 2)
+  maximumPrice          Decimal?              @map("maximum_price") @db.Decimal(12, 2)
+  priceBasis            String?               @map("price_basis") @db.VarChar(50) // "Per Hour", "Per Day", "Per Project"
+  currency              String                @default("NGN") @db.VarChar(3)
+  
+  // Price display text
+  priceDisplayText      String?               @map("price_display_text") @db.VarChar(100)
+  
+  // Additional charges
+  callOutFee            Decimal?              @map("call_out_fee") @db.Decimal(12, 2)
+  materialsCostIncluded Boolean               @default(false) @map("materials_cost_included")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // AVAILABILITY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  availability          ServiceAvailability   @default(AVAILABLE)
+  
+  // Working hours (if applicable)
+  workingDays           String[]              @map("working_days") // ["Monday", "Tuesday", ...]
+  workingHoursStart     String?               @map("working_hours_start") @db.VarChar(10) // "08:00"
+  workingHoursEnd       String?               @map("working_hours_end") @db.VarChar(10) // "17:00"
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXTERNAL LINKS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  externalVideoLink     String?               @map("external_video_link") @db.VarChar(1000)
+  externalDocumentLink  String?               @map("external_document_link") @db.VarChar(1000)
+  portfolioLink         String?               @map("portfolio_link") @db.VarChar(1000)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATISTICS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  viewCount             Int                   @default(0) @map("view_count")
+  averageRating         Decimal               @default(0) @map("average_rating") @db.Decimal(3, 2)
+  totalRatings          Int                   @default(0) @map("total_ratings")
+  totalReviews          Int                   @default(0) @map("total_reviews")
+  completedJobsCount    Int                   @default(0) @map("completed_jobs_count")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS AND DISPLAY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isActive              Boolean               @default(true) @map("is_active")
+  isFeatured            Boolean               @default(false) @map("is_featured")
+  isApproved            Boolean               @default(true) @map("is_approved")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  publishedAt           DateTime?             @map("published_at")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  member                MemberProfile         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category              Category              @relation(fields: [categoryId], references: [id])
+  images                ServiceImage[]
+  ratings               Rating[]
+  transactions          Transaction[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([memberId])
+  @@index([categoryId])
+  @@index([pricingType])
+  @@index([availability])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([averageRating])
+  @@index([viewCount])
+  @@index([createdAt])
+  @@index([name])
+  @@map("services")
+}
+
+// -----------------------------------------------------------------------------
+// 7.2 SERVICE IMAGE MODEL
+// -----------------------------------------------------------------------------
+
+/// Images/portfolio for services
+model ServiceImage {
+  id              String    @id @default(uuid()) @db.Uuid
+  serviceId       String    @map("service_id") @db.Uuid
+  
+  // Image URLs
+  imageUrl        String    @map("image_url") @db.VarChar(500)
+  thumbnailUrl    String?   @map("thumbnail_url") @db.VarChar(500)
+  mediumUrl       String?   @map("medium_url") @db.VarChar(500)
+  
+  // Image metadata
+  altText         String?   @map("alt_text") @db.VarChar(200)
+  caption         String?   @db.VarChar(255)
+  projectName     String?   @map("project_name") @db.VarChar(150) // For portfolio items
+  originalFileName String?  @map("original_file_name") @db.VarChar(255)
+  
+  // File info
+  fileSize        Int?      @map("file_size")
+  mimeType        String?   @map("mime_type") @db.VarChar(100)
+  width           Int?
+  height          Int?
+  
+  // Image type
+  imageType       String    @default("portfolio") @map("image_type") @db.VarChar(50) // portfolio, before_after, certification
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  service         Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  
+  @@index([serviceId])
+  @@index([isPrimary])
+  @@index([displayOrder])
+  @@index([imageType])
+  @@map("service_images")
+}
+
+// ============================================================================
+// SECTION 8: TOOL MODELS
+// ============================================================================
+// Tools listed for lease or sale
+// Aligns with Section 6.4: Tool Marketplace Module
+
+// -----------------------------------------------------------------------------
+// 8.1 TOOL MODEL
+// -----------------------------------------------------------------------------
+
+/// Tools listed by members for lease or sale
+/// Aligns with Section 6.4.1: Tool Listing Structure
+/// Members can list redundant or excess tools
+model Tool {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  memberId                String                  @map("member_id") @db.Uuid
+  categoryId              String                  @map("category_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BASIC INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  name                    String                  @db.VarChar(200)
+  description             String                  @db.Text
+  shortDescription        String?                 @map("short_description") @db.VarChar(300)
+  
+  // Tags for search
+  tags                    String[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TOOL DETAILS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  condition               ToolCondition
+  brandName               String?                 @map("brand_name") @db.VarChar(100)
+  modelNumber             String?                 @map("model_number") @db.VarChar(100)
+  yearManufactured        Int?                    @map("year_manufactured")
+  ageYears                Int?                    @map("age_years")
+  
+  // Specifications
+  specifications          Json?                   // JSON object for flexible specs
+  features                String[]
+  includedAccessories     String[]                @map("included_accessories")
+  
+  // Quantity
+  quantityAvailable       Int                     @default(1) @map("quantity_available")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // LISTING PURPOSE
+  // Aligns with requirement for lease/sale/both options
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  listingPurpose          ToolListingPurpose      @map("listing_purpose")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALE PRICING
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  salePricingType         PricingType?            @map("sale_pricing_type")
+  salePrice               Decimal?                @map("sale_price") @db.Decimal(12, 2)
+  salePriceDisplayText    String?                 @map("sale_price_display_text") @db.VarChar(100)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEASE PRICING
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  leasePricingType        PricingType?            @map("lease_pricing_type")
+  leaseRate               Decimal?                @map("lease_rate") @db.Decimal(12, 2)
+  leaseRatePeriod         LeaseRatePeriod?        @map("lease_rate_period")
+  leasePriceDisplayText   String?                 @map("lease_price_display_text") @db.VarChar(100)
+  
+  // Minimum/Maximum lease duration
+  minimumLeaseDuration    Int?                    @map("minimum_lease_duration") // in lease period units
+  maximumLeaseDuration    Int?                    @map("maximum_lease_duration")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // DEPOSIT
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  depositRequired         DepositRequirement?     @map("deposit_required")
+  depositAmount           Decimal?                @map("deposit_amount") @db.Decimal(12, 2)
+  depositNotes            String?                 @map("deposit_notes") @db.VarChar(255)
+  
+  // Currency
+  currency                String                  @default("NGN") @db.VarChar(3)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // AVAILABILITY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  availabilityStatus      ToolAvailabilityStatus  @default(AVAILABLE) @map("availability_status")
+  
+  // Location for pickup/viewing
+  pickupLocation          String?                 @map("pickup_location") @db.Text
+  pickupLocationLga       String?                 @map("pickup_location_lga") @db.VarChar(100)
+  pickupLocationState     String?                 @map("pickup_location_state") @db.VarChar(50)
+  
+  // Delivery options
+  deliveryAvailable       Boolean                 @default(false) @map("delivery_available")
+  deliveryFee             Decimal?                @map("delivery_fee") @db.Decimal(12, 2)
+  deliveryNotes           String?                 @map("delivery_notes") @db.VarChar(255)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATISTICS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  viewCount               Int                     @default(0) @map("view_count")
+  inquiryCount            Int                     @default(0) @map("inquiry_count")
+  leaseCount              Int                     @default(0) @map("lease_count")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS AND DISPLAY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isActive                Boolean                 @default(true) @map("is_active")
+  isFeatured              Boolean                 @default(false) @map("is_featured")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  publishedAt             DateTime?               @map("published_at")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  member                  MemberProfile           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category                Category                @relation(fields: [categoryId], references: [id])
+  images                  ToolImage[]
+  transactions            Transaction[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([memberId])
+  @@index([categoryId])
+  @@index([listingPurpose])
+  @@index([condition])
+  @@index([availabilityStatus])
+  @@index([isActive])
+  @@index([viewCount])
+  @@index([createdAt])
+  @@index([name])
+  @@map("tools")
+}
+
+// -----------------------------------------------------------------------------
+// 8.2 TOOL IMAGE MODEL
+// -----------------------------------------------------------------------------
+
+/// Images for tools
+model ToolImage {
+  id              String    @id @default(uuid()) @db.Uuid
+  toolId          String    @map("tool_id") @db.Uuid
+  
+  // Image URLs
+  imageUrl        String    @map("image_url") @db.VarChar(500)
+  thumbnailUrl    String?   @map("thumbnail_url") @db.VarChar(500)
+  mediumUrl       String?   @map("medium_url") @db.VarChar(500)
+  
+  // Image metadata
+  altText         String?   @map("alt_text") @db.VarChar(200)
+  caption         String?   @db.VarChar(255)
+  originalFileName String?  @map("original_file_name") @db.VarChar(255)
+  
+  // File info
+  fileSize        Int?      @map("file_size")
+  mimeType        String?   @map("mime_type") @db.VarChar(100)
+  width           Int?
+  height          Int?
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  tool            Tool      @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  
+  @@index([toolId])
+  @@index([isPrimary])
+  @@index([displayOrder])
+  @@map("tool_images")
+}
+
+// ============================================================================
+// SECTION 9: CERTIFICATE MODELS
+// ============================================================================
+// Certificates uploaded by members (externally issued, uploaded as photos)
+// Aligns with Section 6.6: Certificate Display Module
+
+model Certificate {
+  id                      String                        @id @default(uuid()) @db.Uuid
+  memberId                String                        @map("member_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CERTIFICATE INFORMATION
+  // Note: Certificates are issued EXTERNALLY and uploaded as photos
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Certificate image (required - must be a clear photo)
+  certificatePhotoUrl     String                        @map("certificate_photo_url") @db.VarChar(500)
+  certificateThumbnailUrl String?                       @map("certificate_thumbnail_url") @db.VarChar(500)
+  
+  // Certificate details
+  certificateName         String                        @map("certificate_name") @db.VarChar(200)
+  certificateType         CertificateType               @map("certificate_type")
+  
+  // Issuing organization
+  issuingOrganization     String                        @map("issuing_organization") @db.VarChar(200)
+  issuingOrganizationLogo String?                       @map("issuing_organization_logo") @db.VarChar(500)
+  
+  // Dates
+  dateIssued              DateTime                      @map("date_issued") @db.Date
+  expiryDate              DateTime?                     @map("expiry_date") @db.Date
+  
+  // Certificate number/ID if available
+  certificateNumber       String?                       @map("certificate_number") @db.VarChar(100)
+  
+  // External verification link (if available)
+  verificationLink        String?                       @map("verification_link") @db.VarChar(1000)
+  
+  // Description/notes
+  description             String?                       @db.Text
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VERIFICATION STATUS
+  // Admin may verify authenticity before display
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  verificationStatus      CertificateVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verifiedByAdminId       String?                       @map("verified_by_admin_id") @db.Uuid
+  verifiedAt              DateTime?                     @map("verified_at")
+  verificationNotes       String?                       @map("verification_notes") @db.Text
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // DISPLAY SETTINGS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  displayOrder            Int                           @default(0) @map("display_order")
+  isVisible               Boolean                       @default(true) @map("is_visible")
+  isFeatured              Boolean                       @default(false) @map("is_featured")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt               DateTime                      @default(now()) @map("created_at")
+  updatedAt               DateTime                      @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  member                  MemberProfile                 @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  verifiedByAdmin         AdminUser?                    @relation(fields: [verifiedByAdminId], references: [id])
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([memberId])
+  @@index([certificateType])
+  @@index([verificationStatus])
+  @@index([isVisible])
+  @@index([displayOrder])
+  @@index([dateIssued])
+  @@map("certificates")
+}
+
+// ============================================================================
+// SECTION 10: RATING AND REVIEW MODELS
+// ============================================================================
+// Ratings and reviews from verified clients
+// Aligns with Section 6.5: Rating and Review Module
+// IMPORTANT: Only VERIFIED clients can submit ratings
+
+model Rating {
+  id                      String          @id @default(uuid()) @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // WHO IS RATING
+  // Only verified clients can rate - enforced at application level
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  clientId                String          @map("client_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // WHO/WHAT IS BEING RATED
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  memberId                String          @map("member_id") @db.Uuid
+  ratingCategory          RatingCategory  @map("rating_category")
+  
+  // Reference to specific listing (optional based on category)
+  productId               String?         @map("product_id") @db.Uuid
+  serviceId               String?         @map("service_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RATING SCORES (1-5 stars)
+  // Aligns with Section 6.5.1: Rating Structure
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Overall rating (required)
+  overallRating           Int             @map("overall_rating")
+  
+  // Sub-ratings (optional)
+  qualityRating           Int?            @map("quality_rating")      // Quality of work/product
+  communicationRating     Int?            @map("communication_rating") // Communication
+  valueRating             Int?            @map("value_rating")        // Value for money
+  timelinessRating        Int?            @map("timeliness_rating")   // Timeliness/punctuality
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // REVIEW TEXT
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  reviewTitle             String?         @map("review_title") @db.VarChar(150)
+  reviewText              String?         @map("review_text") @db.VarChar(500) // Max 500 characters
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS AND MODERATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  status                  RatingStatus    @default(ACTIVE)
+  isVerifiedPurchase      Boolean         @default(false) @map("is_verified_purchase")
+  
+  // Reporting
+  isReported              Boolean         @default(false) @map("is_reported")
+  reportCount             Int             @default(0) @map("report_count")
+  reportReasons           String[]        @map("report_reasons")
+  
+  // Admin moderation
+  moderatedByAdminId      String?         @map("moderated_by_admin_id") @db.Uuid
+  moderatedAt             DateTime?       @map("moderated_at")
+  moderationNotes         String?         @map("moderation_notes") @db.Text
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPFULNESS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  helpfulCount            Int             @default(0) @map("helpful_count")
+  notHelpfulCount         Int             @default(0) @map("not_helpful_count")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  client                  ClientProfile   @relation("ClientRatingsGiven", fields: [clientId], references: [id], onDelete: Cascade)
+  member                  MemberProfile   @relation("MemberRatingsReceived", fields: [memberId], references: [id], onDelete: Cascade)
+  product                 Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  service                 Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  moderatedByAdmin        AdminUser?      @relation(fields: [moderatedByAdminId], references: [id])
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONSTRAINTS AND INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // A client can only rate a specific member/product/service once
+  @@unique([clientId, memberId, ratingCategory, productId, serviceId])
+  
+  @@index([clientId])
+  @@index([memberId])
+  @@index([ratingCategory])
+  @@index([productId])
+  @@index([serviceId])
+  @@index([overallRating])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ratings")
+}
+
+// ============================================================================
+// SECTION 11: TRANSACTION TRACKING MODELS
+// ============================================================================
+// Input-based transaction tracking (no payment processing)
+// Aligns with Section 10.2: Transaction Tracking (Input-Based)
+
+model Transaction {
+  id                    String            @id @default(uuid()) @db.Uuid
+  memberId              String            @map("member_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TRANSACTION TYPE
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  transactionType       TransactionType   @map("transaction_type")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATED LISTING (Optional)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  productId             String?           @map("product_id") @db.Uuid
+  serviceId             String?           @map("service_id") @db.Uuid
+  toolId                String?           @map("tool_id") @db.Uuid
+  
+  // Listing name (denormalized for historical record)
+  listingName           String?           @map("listing_name") @db.VarChar(200)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CLIENT INFORMATION (Optional - for member's records only)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  clientName            String?           @map("client_name") @db.VarChar(150)
+  clientPhone           String?           @map("client_phone") @db.VarChar(15)
+  clientLocation        String?           @map("client_location") @db.VarChar(255)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TRANSACTION DETAILS
+  // Note: This is self-reported by member for their own tracking
+  // Platform does NOT verify these transactions
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  transactionDate       DateTime          @map("transaction_date") @db.Date
+  
+  // Amount
+  amount                Decimal           @db.Decimal(12, 2)
+  currency              String            @default("NGN") @db.VarChar(3)
+  
+  // Quantity (if applicable)
+  quantity              Int?
+  unitOfMeasure         String?           @map("unit_of_measure") @db.VarChar(50)
+  
+  // For tool leases
+  leaseDuration         Int?              @map("lease_duration")
+  leasePeriodUnit       String?           @map("lease_period_unit") @db.VarChar(20)
+  leaseStartDate        DateTime?         @map("lease_start_date") @db.Date
+  leaseEndDate          DateTime?         @map("lease_end_date") @db.Date
+  depositPaid           Decimal?          @map("deposit_paid") @db.Decimal(12, 2)
+  depositReturned       Boolean?          @map("deposit_returned")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  status                TransactionStatus @default(RECORDED)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // NOTES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  notes                 String?           @db.Text
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  member                MemberProfile     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  product               Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  service               Service?          @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  tool                  Tool?             @relation(fields: [toolId], references: [id], onDelete: SetNull)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDEXES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  @@index([memberId])
+  @@index([transactionType])
+  @@index([transactionDate])
+  @@index([productId])
+  @@index([serviceId])
+  @@index([toolId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+// ============================================================================
+// SECTION 12: CONTENT MANAGEMENT - ABOUT PAGE
+// ============================================================================
+// Models for About page content management
+// Aligns with Section 13: About Page Content Structure
+
+// -----------------------------------------------------------------------------
+// 12.1 ABOUT CONTENT MODEL
+// -----------------------------------------------------------------------------
+
+/// About page content sections (mission, vision, overview, etc.)
+model AboutContent {
+  id                String          @id @default(uuid()) @db.Uuid
+  
+  // Section identification
+  sectionKey        AboutSectionKey @map("section_key")
+  customKey         String?         @map("custom_key") @db.VarChar(50) // For custom sections
+  
+  // Content
+  title             String?         @db.VarChar(200)
+  subtitle          String?         @db.VarChar(300)
+  content           String          @db.Text
+  
+  // Rich content (if needed)
+  contentHtml       String?         @map("content_html") @db.Text
+  
+  // Media
+  imageUrl          String?         @map("image_url") @db.VarChar(500)
+  videoUrl          String?         @map("video_url") @db.VarChar(500)
+  
+  // Display settings
+  displayOrder      Int             @default(0) @map("display_order")
+  isVisible         Boolean         @default(true) @map("is_visible")
+  
+  // Timestamps
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  updatedByAdminId  String?         @map("updated_by_admin_id") @db.Uuid
+  
+  // Relations
+  updatedByAdmin    AdminUser?      @relation(fields: [updatedByAdminId], references: [id])
+  
+  @@unique([sectionKey, customKey])
+  @@index([sectionKey])
+  @@index([isVisible])
+  @@map("about_content")
+}
+
+// -----------------------------------------------------------------------------
+// 12.2 LEADERSHIP PROFILE MODEL
+// -----------------------------------------------------------------------------
+
+/// Leadership profiles for the About page
+/// Aligns with Section 13.1: About Page - Leadership Section
+model LeadershipProfile {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Personal information
+  fullName          String    @map("full_name") @db.VarChar(150)
+  position          String    @db.VarChar(150)
+  title             String?   @db.VarChar(100) // Mr., Mrs., Dr., etc.
+  
+  // Photo
+  photoUrl          String?   @map("photo_url") @db.VarChar(500)
+  photoThumbnailUrl String?   @map("photo_thumbnail_url") @db.VarChar(500)
+  
+  // Contact (publicly visible)
+  phoneNumber       String?   @map("phone_number") @db.VarChar(15)
+  email             String?   @db.VarChar(150)
+  
+  // Biography
+  bio               String?   @db.Text
+  shortBio          String?   @map("short_bio") @db.VarChar(300)
+  
+  // Social/Professional links
+  linkedInUrl       String?   @map("linkedin_url") @db.VarChar(500)
+  twitterUrl        String?   @map("twitter_url") @db.VarChar(500)
+  
+  // Role flags
+  isTrustee         Boolean   @default(false) @map("is_trustee")
+  isFounder         Boolean   @default(false) @map("is_founder")
+  isChairman        Boolean   @default(false) @map("is_chairman")
+  isSecretary       Boolean   @default(false) @map("is_secretary")
+  isTreasurer       Boolean   @default(false) @map("is_treasurer")
+  
+  // Dates
+  appointmentDate   DateTime? @map("appointment_date") @db.Date
+  termEndDate       DateTime? @map("term_end_date") @db.Date
+  
+  // Display settings
+  displayOrder      Int       @default(0) @map("display_order")
+  isActive          Boolean   @default(true) @map("is_active")
+  showOnAboutPage   Boolean   @default(true) @map("show_on_about_page")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@index([isActive])
+  @@index([displayOrder])
+  @@index([isTrustee])
+  @@index([showOnAboutPage])
+  @@map("leadership_profiles")
+}
+
+// -----------------------------------------------------------------------------
+// 12.3 FOUNDATION OBJECTIVE MODEL
+// -----------------------------------------------------------------------------
+
+/// Foundation objectives from the constitution
+/// Aligns with Article 3 of the Constitution: Aims and Objectives
+model FoundationObjective {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Objective number (1-10 based on constitution)
+  objectiveNumber   Int       @unique @map("objective_number")
+  
+  // Content
+  title             String    @db.VarChar(300)
+  description       String    @db.Text
+  shortDescription  String?   @map("short_description") @db.VarChar(200)
+  
+  // Icon/visual
+  iconName          String?   @map("icon_name") @db.VarChar(50)
+  iconUrl           String?   @map("icon_url") @db.VarChar(500)
+  
+  // Display settings
+  displayOrder      Int       @default(0) @map("display_order")
+  isDisplayed       Boolean   @default(true) @map("is_displayed")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@index([isDisplayed])
+  @@index([displayOrder])
+  @@map("foundation_objectives")
+}
+
+// ============================================================================
+// SECTION 13: SPONSORS AND PARTNERS
+// ============================================================================
+// Aligns with Section 14: Sponsors and Partners Directory
+
+model SponsorPartner {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ORGANIZATION INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  organizationName      String                  @map("organization_name") @db.VarChar(200)
+  
+  // Logo
+  logoUrl               String?                 @map("logo_url") @db.VarChar(500)
+  logoThumbnailUrl      String?                 @map("logo_thumbnail_url") @db.VarChar(500)
+  
+  // Type and category
+  type                  SponsorPartnerType
+  category              SponsorPartnerCategory
+  
+  // Description
+  description           String?                 @db.Text
+  shortDescription      String?                 @map("short_description") @db.VarChar(300)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONTACT INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  website               String?                 @db.VarChar(500)
+  contactPersonName     String?                 @map("contact_person_name") @db.VarChar(150)
+  contactPersonTitle    String?                 @map("contact_person_title") @db.VarChar(100)
+  contactEmail          String?                 @map("contact_email") @db.VarChar(150)
+  contactPhone          String?                 @map("contact_phone") @db.VarChar(15)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PARTNERSHIP DETAILS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  partnershipSince      DateTime?               @map("partnership_since") @db.Date
+  partnershipEndDate    DateTime?               @map("partnership_end_date") @db.Date
+  isOngoing             Boolean                 @default(true) @map("is_ongoing")
+  
+  // Sponsorship level (for sponsors)
+  sponsorshipLevel      String?                 @map("sponsorship_level") @db.VarChar(50) // Platinum, Gold, Silver, Bronze
+  sponsorshipAmount     Decimal?                @map("sponsorship_amount") @db.Decimal(12, 2)
+  
+  // Areas of support
+  areasOfSupport        String[]                @map("areas_of_support")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // DISPLAY SETTINGS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  displayOrder          Int                     @default(0) @map("display_order")
+  isActive              Boolean                 @default(true) @map("is_active")
+  isFeatured            Boolean                 @default(false) @map("is_featured")
+  showOnAboutPage       Boolean                 @default(true) @map("show_on_about_page")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+  
+  @@index([type])
+  @@index([category])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([displayOrder])
+  @@index([showOnAboutPage])
+  @@map("sponsors_partners")
+}
+
+// ============================================================================
+// SECTION 14: TESTIMONIALS
+// ============================================================================
+// Aligns with Section 15: Testimonials Section
+
+model Testimonial {
+  id                  String                @id @default(uuid()) @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PERSON INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  personName          String                @map("person_name") @db.VarChar(150)
+  
+  // Photo
+  photoUrl            String?               @map("photo_url") @db.VarChar(500)
+  photoThumbnailUrl   String?               @map("photo_thumbnail_url") @db.VarChar(500)
+  
+  // Title and organization
+  titleRole           String                @map("title_role") @db.VarChar(200) // e.g., "Tomato Farmer, Igabi LGA"
+  organization        String?               @db.VarChar(200)
+  location            String?               @db.VarChar(150)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TESTIMONIAL CONTENT
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  testimonialText     String                @map("testimonial_text") @db.VarChar(1000)
+  shortQuote          String?               @map("short_quote") @db.VarChar(200) // For featured displays
+  
+  // Category
+  category            TestimonialCategory
+  
+  // Rating (if applicable)
+  rating              Int?                  // 1-5 stars
+  
+  // Video testimonial
+  videoUrl            String?               @map("video_url") @db.VarChar(500)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // APPROVAL AND STATUS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isApproved          Boolean               @default(false) @map("is_approved")
+  approvedByAdminId   String?               @map("approved_by_admin_id") @db.Uuid
+  approvedAt          DateTime?             @map("approved_at")
+  
+  // Display settings
+  isFeatured          Boolean               @default(false) @map("is_featured")
+  isVisible           Boolean               @default(true) @map("is_visible")
+  showOnAboutPage     Boolean               @default(true) @map("show_on_about_page")
+  showOnHomePage      Boolean               @default(false) @map("show_on_home_page")
+  displayOrder        Int                   @default(0) @map("display_order")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  testimonialDate     DateTime?             @map("testimonial_date") @db.Date
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  approvedByAdmin     AdminUser?            @relation(fields: [approvedByAdminId], references: [id])
+  
+  @@index([category])
+  @@index([isFeatured])
+  @@index([isVisible])
+  @@index([isApproved])
+  @@index([displayOrder])
+  @@map("testimonials")
+}
+
+// ============================================================================
+// SECTION 15: EVENTS
+// ============================================================================
+// Foundation events management
+// Aligns with Section 16: Events Management
+
+// -----------------------------------------------------------------------------
+// 15.1 EVENT MODEL
+// -----------------------------------------------------------------------------
+
+model Event {
+  id                    String        @id @default(uuid()) @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BASIC INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  title                 String        @db.VarChar(300)
+  eventType             EventType     @map("event_type")
+  description           String        @db.Text
+  shortDescription      String?       @map("short_description") @db.VarChar(300)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // DATE AND TIME
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  startDate             DateTime      @map("start_date") @db.Date
+  startTime             String?       @map("start_time") @db.VarChar(10) // "10:00 AM"
+  endDate               DateTime?     @map("end_date") @db.Date
+  endTime               String?       @map("end_time") @db.VarChar(10)
+  
+  // Timezone
+  timezone              String        @default("Africa/Lagos") @db.VarChar(50)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VENUE
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  venueName             String        @map("venue_name") @db.VarChar(250)
+  venueAddress          String?       @map("venue_address") @db.Text
+  cityLga               String?       @map("city_lga") @db.VarChar(100)
+  state                 String?       @db.VarChar(50)
+  
+  // Virtual event details
+  isVirtualEvent        Boolean       @default(false) @map("is_virtual_event")
+  virtualEventLink      String?       @map("virtual_event_link") @db.VarChar(500)
+  virtualEventPlatform  String?       @map("virtual_event_platform") @db.VarChar(100)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // IMAGES
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  featuredImageUrl      String?       @map("featured_image_url") @db.VarChar(500)
+  featuredImageThumbnail String?      @map("featured_image_thumbnail") @db.VarChar(500)
+  bannerImageUrl        String?       @map("banner_image_url") @db.VarChar(500)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  status                EventStatus   @default(UPCOMING)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST-EVENT INFORMATION (For completed events)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  attendanceCount       Int?          @map("attendance_count")
+  eventSummary          String?       @map("event_summary") @db.Text
+  keyOutcomes           String?       @map("key_outcomes") @db.Text
+  notableAttendees      String?       @map("notable_attendees") @db.Text
+  lessonsLearned        String?       @map("lessons_learned") @db.Text
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXTERNAL LINKS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  videoLink             String?       @map("video_link") @db.VarChar(500)
+  newsLink              String?       @map("news_link") @db.VarChar(500)
+  registrationLink      String?       @map("registration_link") @db.VarChar(500)
+  reportDocumentLink    String?       @map("report_document_link") @db.VarChar(500)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PUBLISHING AND DISPLAY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isPublished           Boolean       @default(false) @map("is_published")
+  publishedAt           DateTime?     @map("published_at")
+  isFeatured            Boolean       @default(false) @map("is_featured")
+  showOnHomePage        Boolean       @default(false) @map("show_on_home_page")
+  
+  // View count
+  viewCount             Int           @default(0) @map("view_count")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // METADATA
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  tags                  String[]
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ADMIN TRACKING
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdByAdminId      String?       @map("created_by_admin_id") @db.Uuid
+  lastUpdatedByAdminId  String?       @map("last_updated_by_admin_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdByAdmin        AdminUser?    @relation("EventCreatedBy", fields: [createdByAdminId], references: [id])
+  lastUpdatedByAdmin    AdminUser?    @relation("EventUpdatedBy", fields: [lastUpdatedByAdminId], references: [id])
+  gallery               EventGalleryImage[]
+  agenda                EventAgendaItem[]
+  
+  @@index([eventType])
+  @@index([status])
+  @@index([startDate])
+  @@index([isPublished])
+  @@index([isFeatured])
+  @@map("events")
+}
+
+// -----------------------------------------------------------------------------
+// 15.2 EVENT GALLERY IMAGE MODEL
+// -----------------------------------------------------------------------------
+
+/// Event photo gallery
+model EventGalleryImage {
+  id                  String    @id @default(uuid()) @db.Uuid
+  eventId             String    @map("event_id") @db.Uuid
+  
+  // Image URLs
+  imageUrl            String    @map("image_url") @db.VarChar(500)
+  thumbnailUrl        String?   @map("thumbnail_url") @db.VarChar(500)
+  mediumUrl           String?   @map("medium_url") @db.VarChar(500)
+  
+  // Metadata
+  caption             String?   @db.VarChar(300)
+  altText             String?   @map("alt_text") @db.VarChar(200)
+  photographer        String?   @db.VarChar(150)
+  takenAt             DateTime? @map("taken_at")
+  
+  // File info
+  originalFileName    String?   @map("original_file_name") @db.VarChar(255)
+  fileSize            Int?      @map("file_size")
+  width               Int?
+  height              Int?
+  
+  // Display settings
+  displayOrder        Int       @default(0) @map("display_order")
+  isFeatured          Boolean   @default(false) @map("is_featured")
+  
+  // Admin tracking
+  uploadedByAdminId   String?   @map("uploaded_by_admin_id") @db.Uuid
+  uploadedAt          DateTime  @default(now()) @map("uploaded_at")
+  
+  // Relations
+  event               Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedByAdmin     AdminUser? @relation(fields: [uploadedByAdminId], references: [id])
+  
+  @@index([eventId])
+  @@index([displayOrder])
+  @@index([isFeatured])
+  @@map("event_gallery_images")
+}
+
+// -----------------------------------------------------------------------------
+// 15.3 EVENT AGENDA ITEM MODEL
+// -----------------------------------------------------------------------------
+
+/// Event agenda/schedule items
+model EventAgendaItem {
+  id              String    @id @default(uuid()) @db.Uuid
+  eventId         String    @map("event_id") @db.Uuid
+  
+  // Time
+  startTime       String?   @map("start_time") @db.VarChar(50) // "10:00 AM" or "10:00 - 11:00"
+  endTime         String?   @map("end_time") @db.VarChar(50)
+  duration        String?   @db.VarChar(50) // "1 hour", "30 minutes"
+  
+  // Content
+  title           String    @db.VarChar(250)
+  description     String?   @db.Text
+  
+  // Speaker/Presenter
+  speakerName     String?   @map("speaker_name") @db.VarChar(150)
+  speakerTitle    String?   @map("speaker_title") @db.VarChar(150)
+  speakerPhoto    String?   @map("speaker_photo") @db.VarChar(500)
+  
+  // Location (if different from main venue)
+  location        String?   @db.VarChar(200)
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isBreak         Boolean   @default(false) @map("is_break") // Tea break, lunch, etc.
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@index([eventId])
+  @@index([displayOrder])
+  @@map("event_agenda_items")
+}
+
+// ============================================================================
+// SECTION 16: FOUNDATION DOCUMENTS
+// ============================================================================
+// Official foundation documents and certificates
+// Aligns with Section 13.2: Foundation Documents & Certificates
+
+model FoundationDocument {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  
+  // Document information
+  documentName        String                  @map("document_name") @db.VarChar(200)
+  documentType        FoundationDocumentType  @map("document_type")
+  
+  // File (can be photo or link)
+  photoUrl            String?                 @map("photo_url") @db.VarChar(500)
+  photoThumbnailUrl   String?                 @map("photo_thumbnail_url") @db.VarChar(500)
+  externalLink        String?                 @map("external_link") @db.VarChar(500)
+  
+  // Document details
+  description         String?                 @db.Text
+  documentNumber      String?                 @map("document_number") @db.VarChar(100)
+  issueDate           DateTime?               @map("issue_date") @db.Date
+  expiryDate          DateTime?               @map("expiry_date") @db.Date
+  issuingAuthority    String?                 @map("issuing_authority") @db.VarChar(200)
+  
+  // Display settings
+  displayOrder        Int                     @default(0) @map("display_order")
+  isVisible           Boolean                 @default(true) @map("is_visible")
+  showOnAboutPage     Boolean                 @default(true) @map("show_on_about_page")
+  
+  // Timestamps
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  
+  @@index([documentType])
+  @@index([isVisible])
+  @@index([displayOrder])
+  @@map("foundation_documents")
+}
+
+// ============================================================================
+// SECTION 17: ADMIN MODELS
+// ============================================================================
+// Admin users and portal management
+// Aligns with Section 8: Admin Portal Specifications
+
+// -----------------------------------------------------------------------------
+// 17.1 ADMIN USER MODEL
+// -----------------------------------------------------------------------------
+
+/// Admin users for the admin portal
+model AdminUser {
+  id                  String      @id @default(uuid()) @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // AUTHENTICATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  username            String      @unique @db.VarChar(50)
+  passwordHash        String      @map("password_hash") @db.VarChar(255)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PERSONAL INFORMATION
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  fullName            String      @map("full_name") @db.VarChar(150)
+  phoneNumber         String?     @map("phone_number") @db.VarChar(15)
+  email               String?     @db.VarChar(150)
+  profilePhotoUrl     String?     @map("profile_photo_url") @db.VarChar(500)
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ROLE AND PERMISSIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  role                AdminRole
+  
+  // Specific permissions (for fine-grained control)
+  canVerifyMembers    Boolean     @default(false) @map("can_verify_members")
+  canVerifyClients    Boolean     @default(false) @map("can_verify_clients")
+  canResetPasswords   Boolean     @default(false) @map("can_reset_passwords")
+  canManageContent    Boolean     @default(false) @map("can_manage_content")
+  canManageEvents     Boolean     @default(false) @map("can_manage_events")
+  canManageAdmins     Boolean     @default(false) @map("can_manage_admins")
+  canExportData       Boolean     @default(false) @map("can_export_data")
+  canAccessReports    Boolean     @default(false) @map("can_access_reports")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ACCOUNT STATUS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  isActive            Boolean     @default(true) @map("is_active")
+  mustChangePassword  Boolean     @default(true) @map("must_change_password")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOGIN TRACKING
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  lastLoginAt         DateTime?   @map("last_login_at")
+  lastLoginIp         String?     @map("last_login_ip") @db.VarChar(45)
+  loginCount          Int         @default(0) @map("login_count")
+  failedLoginAttempts Int         @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?   @map("locked_until")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ADMIN HIERARCHY
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdByAdminId    String?     @map("created_by_admin_id") @db.Uuid
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // TIMESTAMPS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  deactivatedAt       DateTime?   @map("deactivated_at")
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Self-relation for hierarchy
+  createdByAdmin      AdminUser?  @relation("AdminCreatedBy", fields: [createdByAdminId], references: [id])
+  createdAdmins       AdminUser[] @relation("AdminCreatedBy")
+  
+  // Users verified by this admin
+  usersVerified       User[]      @relation("UserVerifiedBy")
+  usersSuspended      User[]      @relation("UserSuspendedBy")
+  
+  // Documents verified by this admin
+  documentsVerified   VerificationDocument[]
+  
+  // Certificates verified by this admin
+  certificatesVerified Certificate[]
+  
+  // Password resets processed by this admin
+  passwordResetsProcessed PasswordResetRequest[]
+  
+  // Ratings moderated by this admin
+  ratingsModerated    Rating[]
+  
+  // Content updated by this admin
+  aboutContentUpdated AboutContent[]
+  
+  // Testimonials approved by this admin
+  testimonialsApproved Testimonial[]
+  
+  // Events managed by this admin
+  eventsCreated       Event[]     @relation("EventCreatedBy")
+  eventsUpdated       Event[]     @relation("EventUpdatedBy")
+  eventImagesUploaded EventGalleryImage[]
+  
+  // Activity logs
+  activityLogs        AdminActivityLog[]
+  
+  // Sessions
+  sessions            AdminSession[]
+  
+  @@index([username])
+  @@index([role])
+  @@index([isActive])
+  @@map("admin_users")
+}
+
+// -----------------------------------------------------------------------------
+// 17.2 ADMIN SESSION MODEL
+// -----------------------------------------------------------------------------
+
+/// Admin session management
+model AdminSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  adminId         String    @map("admin_id") @db.Uuid
+  
+  // Session token
+  token           String    @unique @db.VarChar(500)
+  
+  // Device and location info
+  ipAddress       String?   @map("ip_address") @db.VarChar(45)
+  userAgent       String?   @map("user_agent") @db.VarChar(500)
+  deviceInfo      String?   @map("device_info") @db.VarChar(255)
+  
+  // Status
+  isActive        Boolean   @default(true) @map("is_active")
+  
+  // Timestamps
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastUsedAt      DateTime  @default(now()) @map("last_used_at")
+  terminatedAt    DateTime? @map("terminated_at")
+  terminatedReason String?  @map("terminated_reason") @db.VarChar(100)
+  
+  // Relations
+  admin           AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  
+  @@index([adminId])
+  @@index([token])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+// -----------------------------------------------------------------------------
+// 17.3 ADMIN ACTIVITY LOG MODEL
+// -----------------------------------------------------------------------------
+
+/// Audit trail for admin actions
+/// Aligns with requirement for admin activity tracking
+model AdminActivityLog {
+  id                  String          @id @default(uuid()) @db.Uuid
+  adminId             String          @map("admin_id") @db.Uuid
+  
+  // Action details
+  actionType          AdminActionType @map("action_type")
+  actionDescription   String          @map("action_description") @db.Text
+  
+  // Target information
+  targetType          String?         @map("target_type") @db.VarChar(50) // user, event, sponsor, etc.
+  targetId            String?         @map("target_id") @db.Uuid
+  targetName          String?         @map("target_name") @db.VarChar(200) // Denormalized for easy viewing
+  
+  // Changes made (for audit purposes)
+  previousValues      Json?           @map("previous_values")
+  newValues           Json?           @map("new_values")
+  changedFields       String[]        @map("changed_fields")
+  
+  // Request information
+  ipAddress           String?         @map("ip_address") @db.VarChar(45)
+  userAgent           String?         @map("user_agent") @db.VarChar(500)
+  sessionId           String?         @map("session_id") @db.Uuid
+  
+  // Additional context
+  additionalData      Json?           @map("additional_data")
+  
+  // Timestamp
+  createdAt           DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  admin               AdminUser       @relation(fields: [adminId], references: [id])
+  
+  @@index([adminId])
+  @@index([actionType])
+  @@index([targetType])
+  @@index([targetId])
+  @@index([createdAt])
+  @@map("admin_activity_logs")
+}
+
+// ============================================================================
+// SECTION 18: SYSTEM CONFIGURATION AND REFERENCE DATA
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 18.1 SYSTEM SETTINGS MODEL
+// -----------------------------------------------------------------------------
+
+/// System settings and configuration
+model SystemSetting {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // Setting identification
+  settingKey      String    @unique @map("setting_key") @db.VarChar(100)
+  settingGroup    String    @map("setting_group") @db.VarChar(50) // general, security, notifications, etc.
+  
+  // Value
+  settingValue    String    @map("setting_value") @db.Text
+  settingType     String    @map("setting_type") @db.VarChar(20) // string, number, boolean, json
+  defaultValue    String?   @map("default_value") @db.Text
+  
+  // Metadata
+  displayName     String?   @map("display_name") @db.VarChar(100)
+  description     String?   @db.Text
+  
+  // Validation
+  validationRules Json?     @map("validation_rules")
+  
+  // Status
+  isEditable      Boolean   @default(true) @map("is_editable")
+  isPublic        Boolean   @default(false) @map("is_public") // Can be accessed without auth
+  
+  // Timestamps
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  updatedBy       String?   @map("updated_by") @db.Uuid
+  
+  @@index([settingKey])
+  @@index([settingGroup])
+  @@map("system_settings")
+}
+
+// -----------------------------------------------------------------------------
+// 18.2 CONTACT INFORMATION MODEL
+// -----------------------------------------------------------------------------
+
+/// Foundation contact information
+model ContactInfo {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // Type
+  contactType     String    @map("contact_type") @db.VarChar(50) // headquarters, branch, regional
+  label           String?   @db.VarChar(100)
+  
+  // Address
+  address         String?   @db.Text
+  landmark        String?   @db.VarChar(255)
+  city            String?   @db.VarChar(100)
+  localGovernmentArea String? @map("local_government_area") @db.VarChar(100)
+  state           String?   @db.VarChar(50)
+  country         String    @default("Nigeria") @db.VarChar(50)
+  postalCode      String?   @map("postal_code") @db.VarChar(20)
+  
+  // GPS coordinates
+  latitude        Decimal?  @db.Decimal(10, 8)
+  longitude       Decimal?  @db.Decimal(11, 8)
+  mapLink         String?   @map("map_link") @db.VarChar(500)
+  
+  // Contact details
+  phoneNumber1    String?   @map("phone_number_1") @db.VarChar(15)
+  phoneNumber2    String?   @map("phone_number_2") @db.VarChar(15)
+  phoneNumber3    String?   @map("phone_number_3") @db.VarChar(15)
+  whatsappNumber  String?   @map("whatsapp_number") @db.VarChar(15)
+  email           String?   @db.VarChar(150)
+  alternateEmail  String?   @map("alternate_email") @db.VarChar(150)
+  website         String?   @db.VarChar(500)
+  
+  // Office hours
+  officeHours     String?   @map("office_hours") @db.Text
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isActive        Boolean   @default(true) @map("is_active")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@index([contactType])
+  @@index([isActive])
+  @@index([isPrimary])
+  @@map("contact_info")
+}
+
+// -----------------------------------------------------------------------------
+// 18.3 SOCIAL MEDIA LINKS MODEL
+// -----------------------------------------------------------------------------
+
+/// Foundation social media links
+model SocialMediaLink {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // Platform
+  platform        String    @unique @db.VarChar(50) // facebook, twitter, instagram, linkedin, youtube, tiktok
+  platformName    String    @map("platform_name") @db.VarChar(50) // Display name
+  
+  // Link
+  url             String    @db.VarChar(500)
+  username        String?   @db.VarChar(100)
+  
+  // Icon
+  iconName        String?   @map("icon_name") @db.VarChar(50)
+  iconUrl         String?   @map("icon_url") @db.VarChar(500)
+  
+  // Display settings
+  displayOrder    Int       @default(0) @map("display_order")
+  isActive        Boolean   @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@index([platform])
+  @@index([isActive])
+  @@map("social_media_links")
+}
+
+// -----------------------------------------------------------------------------
+// 18.4 NIGERIAN STATE MODEL
+// -----------------------------------------------------------------------------
+
+/// Nigerian states for dropdown/validation
+model NigerianState {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // State info
+  name            String    @unique @db.VarChar(50)
+  code            String    @unique @db.VarChar(5)
+  region          String    @db.VarChar(50) // North-Central, North-East, North-West, South-East, South-South, South-West
+  capital         String    @db.VarChar(100)
+  
+  // Status
+  isActive        Boolean   @default(true) @map("is_active")
+  
+  // Relations
+  lgas            NigerianLGA[]
+  
+  @@index([region])
+  @@index([isActive])
+  @@map("nigerian_states")
+}
+
+// -----------------------------------------------------------------------------
+// 18.5 NIGERIAN LGA MODEL
+// -----------------------------------------------------------------------------
+
+/// Nigerian Local Government Areas
+model NigerianLGA {
+  id              String        @id @default(uuid()) @db.Uuid
+  stateId         String        @map("state_id") @db.Uuid
+  
+  // LGA info
+  name            String        @db.VarChar(100)
+  code            String?       @db.VarChar(10)
+  
+  // Status
+  isActive        Boolean       @default(true) @map("is_active")
+  
+  // Relations
+  state           NigerianState @relation(fields: [stateId], references: [id])
+  
+  @@unique([stateId, name])
+  @@index([stateId])
+  @@index([isActive])
+  @@map("nigerian_lgas")
+}
+
+// ============================================================================
+// SECTION 19: ANALYTICS AND STATISTICS MODELS
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 19.1 DAILY STATISTICS MODEL
+// -----------------------------------------------------------------------------
+
+/// Daily statistics tracking for reporting
+model DailyStatistics {
+  id                      String    @id @default(uuid()) @db.Uuid
+  date                    DateTime  @unique @db.Date
+  
+  // User statistics
+  totalUsers              Int       @default(0) @map("total_users")
+  totalMembers            Int       @default(0) @map("total_members")
+  totalClients            Int       @default(0) @map("total_clients")
+  newMembers              Int       @default(0) @map("new_members")
+  newClients              Int       @default(0) @map("new_clients")
+  pendingMemberVerifications Int    @default(0) @map("pending_member_verifications")
+  pendingClientVerifications Int    @default(0) @map("pending_client_verifications")
+  verificationsApproved   Int       @default(0) @map("verifications_approved")
+  verificationsRejected   Int       @default(0) @map("verifications_rejected")
+  
+  // Listing statistics
+  totalProducts           Int       @default(0) @map("total_products")
+  totalServices           Int       @default(0) @map("total_services")
+  totalTools              Int       @default(0) @map("total_tools")
+  newProducts             Int       @default(0) @map("new_products")
+  newServices             Int       @default(0) @map("new_services")
+  newTools                Int       @default(0) @map("new_tools")
+  
+  // Engagement statistics
+  totalProfileViews       Int       @default(0) @map("total_profile_views")
+  totalProductViews       Int       @default(0) @map("total_product_views")
+  totalServiceViews       Int       @default(0) @map("total_service_views")
+  totalToolViews          Int       @default(0) @map("total_tool_views")
+  newRatings              Int       @default(0) @map("new_ratings")
+  newReviews              Int       @default(0) @map("new_reviews")
+  newTransactions         Int       @default(0) @map("new_transactions")
+  
+  // Transaction amounts (self-reported)
+  totalTransactionAmount  Decimal   @default(0) @map("total_transaction_amount") @db.Decimal(15, 2)
+  
+  // Calculation metadata
+  calculatedAt            DateTime  @default(now()) @map("calculated_at")
+  
+  @@index([date])
+  @@map("daily_statistics")
+}
+
+// -----------------------------------------------------------------------------
+// 19.2 VIEW LOG MODEL
+// -----------------------------------------------------------------------------
+
+/// Page/Profile view tracking
+model ViewLog {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // What was viewed
+  entityType      String    @map("entity_type") @db.VarChar(50) // member_profile, product, service, tool
+  entityId        String    @map("entity_id") @db.Uuid
+  
+  // Who viewed (if known)
+  viewerType      String    @map("viewer_type") @db.VarChar(20) // anonymous, client, member
+  viewerId        String?   @map("viewer_id") @db.Uuid
+  
+  // Request info
+  ipAddress       String?   @map("ip_address") @db.VarChar(45)
+  userAgent       String?   @map("user_agent") @db.VarChar(500)
+  referrer        String?   @db.VarChar(500)
+  
+  // Timestamp
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([entityType, entityId])
+  @@index([viewerId])
+  @@index([createdAt])
+  @@map("view_logs")
+}
+
+// -----------------------------------------------------------------------------
+// 19.3 SEARCH LOG MODEL
+// -----------------------------------------------------------------------------
+
+/// Search history for analytics
+model SearchLog {
+  id              String    @id @default(uuid()) @db.Uuid
+  
+  // Search details
+  searchQuery     String    @map("search_query") @db.VarChar(255)
+  searchType      String    @map("search_type") @db.VarChar(50) // members, products, services, tools, all
+  filters         Json?     // Applied filters
+  resultCount     Int       @map("result_count")
+  
+  // Who searched (if known)
+  userId          String?   @map("user_id") @db.Uuid
+  
+  // Request info
+  ipAddress       String?   @map("ip_address") @db.VarChar(45)
+  
+  // Timestamp
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([searchQuery])
+  @@index([searchType])
+  @@index([createdAt])
+  @@map("search_logs")
+}
+
+// ============================================================================
+// SECTION 20: SUPPORT MODELS
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 20.1 FILE UPLOAD MODEL
+// -----------------------------------------------------------------------------
+
+/// Centralized file upload tracking
+model FileUpload {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // File info
+  originalName      String    @map("original_name") @db.VarChar(255)
+  storedName        String    @map("stored_name") @db.VarChar(255)
+  fileUrl           String    @map("file_url") @db.VarChar(500)
+  thumbnailUrl      String?   @map("thumbnail_url") @db.VarChar(500)
+  mimeType          String    @map("mime_type") @db.VarChar(100)
+  fileSize          Int       @map("file_size") // bytes
+  
+  // For images
+  width             Int?
+  height            Int?
+  
+  // Uploader info
+  uploadedById      String    @map("uploaded_by_id") @db.Uuid
+  uploadedByType    String    @map("uploaded_by_type") @db.VarChar(20) // user, admin
+  
+  // Related entity
+  entityType        String?   @map("entity_type") @db.VarChar(50)
+  entityId          String?   @map("entity_id") @db.Uuid
+  
+  // Status
+  isPublic          Boolean   @default(true) @map("is_public")
+  isTemporary       Boolean   @default(false) @map("is_temporary")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  expiresAt         DateTime? @map("expires_at")
+  
+  @@index([uploadedById])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("file_uploads")
+}
+
+// -----------------------------------------------------------------------------
+// 20.2 FAQ MODEL
+// -----------------------------------------------------------------------------
+
+/// Frequently Asked Questions
+model FAQ {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Question and answer
+  question          String    @db.VarChar(500)
+  answer            String    @db.Text
+  
+  // Category
+  category          String?   @db.VarChar(100) // registration, products, services, etc.
+  targetAudience    String?   @map("target_audience") @db.VarChar(50) // all, members, clients
+  
+  // Display settings
+  displayOrder      Int       @default(0) @map("display_order")
+  isVisible         Boolean   @default(true) @map("is_visible")
+  isFeatured        Boolean   @default(false) @map("is_featured")
+  
+  // Engagement
+  viewCount         Int       @default(0) @map("view_count")
+  helpfulCount      Int       @default(0) @map("helpful_count")
+  notHelpfulCount   Int       @default(0) @map("not_helpful_count")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@index([category])
+  @@index([isVisible])
+  @@index([displayOrder])
+  @@map("faqs")
+}
+// ============================================================================
+// SECTION 20: SUPPORT MODELS (Continued)
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 20.3 ANNOUNCEMENT MODEL (Continued)
+// -----------------------------------------------------------------------------
+
+/// System announcements and banners
+model Announcement {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Content
+  title             String    @db.VarChar(200)
+  content           String    @db.Text
+  shortContent      String?   @map("short_content") @db.VarChar(300)
+  
+  // Type and styling
+  type              String    @db.VarChar(50) // info, warning, success, error, promotion
+  backgroundColor   String?   @map("background_color") @db.VarChar(7)
+  textColor         String?   @map("text_color") @db.VarChar(7)
+  
+  // Target audience
+  targetAudience    String[]  @map("target_audience") // all, members, clients, farmers, artisans
+  targetStates      String[]  @map("target_states") // Specific states if applicable
+  
+  // Media
+  imageUrl          String?   @map("image_url") @db.VarChar(500)
+  
+  // Action
+  actionUrl         String?   @map("action_url") @db.VarChar(500)
+  actionLabel       String?   @map("action_label") @db.VarChar(100)
+  
+  // Scheduling
+  startDate         DateTime  @map("start_date")
+  endDate           DateTime? @map("end_date")
+  
+  // Display settings
+  isPinned          Boolean   @default(false) @map("is_pinned")
+  isActive          Boolean   @default(true) @map("is_active")
+  showOnHomePage    Boolean   @default(true) @map("show_on_home_page")
+  showOnDashboard   Boolean   @default(true) @map("show_on_dashboard")
+  isDismissible     Boolean   @default(true) @map("is_dismissible")
+  
+  // Engagement
+  viewCount         Int       @default(0) @map("view_count")
+  clickCount        Int       @default(0) @map("click_count")
+  dismissCount      Int       @default(0) @map("dismiss_count")
+  
+  // Admin tracking
+  createdByAdminId  String    @map("created_by_admin_id") @db.Uuid
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([isPinned])
+  @@index([type])
+  @@map("announcements")
+}
+
+// -----------------------------------------------------------------------------
+// 20.4 CONTENT REPORT MODEL
+// -----------------------------------------------------------------------------
+
+/// Reports/Flags for content moderation
+model ContentReport {
+  id                  String    @id @default(uuid()) @db.Uuid
+  
+  // Reporter information
+  reporterType        String    @map("reporter_type") @db.VarChar(20) // user, admin, system
+  reporterId          String?   @map("reporter_id") @db.Uuid
+  
+  // What is being reported
+  contentType         String    @map("content_type") @db.VarChar(50) // rating, product, service, member, tool
+  contentId           String    @map("content_id") @db.Uuid
+  contentOwnerId      String?   @map("content_owner_id") @db.Uuid // Owner of the reported content
+  
+  // Report details
+  reason              String    @db.VarChar(100) // spam, inappropriate, misleading, fake, harassment, other
+  description         String?   @db.Text
+  evidenceUrls        String[]  @map("evidence_urls") // Screenshots or links as evidence
+  
+  // Status
+  status              String    @default("pending") @db.VarChar(20) // pending, under_review, resolved, dismissed
+  priority            String    @default("normal") @db.VarChar(20) // low, normal, high, urgent
+  
+  // Resolution
+  reviewedByAdminId   String?   @map("reviewed_by_admin_id") @db.Uuid
+  reviewedAt          DateTime? @map("reviewed_at")
+  resolution          String?   @db.VarChar(50) // no_action, warning_issued, content_removed, user_suspended
+  resolutionNotes     String?   @map("resolution_notes") @db.Text
+  actionTaken         String?   @map("action_taken") @db.Text
+  
+  // Timestamps
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  @@index([contentType, contentId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("content_reports")
+}
+
+// -----------------------------------------------------------------------------
+// 20.5 AUDIT TRAIL MODEL
+// -----------------------------------------------------------------------------
+
+/// General audit trail for important data changes
+model AuditTrail {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // What changed
+  tableName         String    @map("table_name") @db.VarChar(100)
+  recordId          String    @map("record_id") @db.Uuid
+  action            String    @db.VarChar(20) // CREATE, UPDATE, DELETE, RESTORE
+  
+  // Change details
+  oldValues         Json?     @map("old_values")
+  newValues         Json?     @map("new_values")
+  changedFields     String[]  @map("changed_fields")
+  
+  // Who made the change
+  changedById       String?   @map("changed_by_id") @db.Uuid
+  changedByType     String?   @map("changed_by_type") @db.VarChar(20) // user, admin, system
+  changedByName     String?   @map("changed_by_name") @db.VarChar(150) // Denormalized for easy viewing
+  
+  // Request context
+  ipAddress         String?   @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.VarChar(500)
+  requestId         String?   @map("request_id") @db.VarChar(100)
+  
+  // Additional context
+  reason            String?   @db.Text
+  additionalData    Json?     @map("additional_data")
+  
+  // Timestamp
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  @@index([tableName, recordId])
+  @@index([changedById])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_trails")
+}
+
+// -----------------------------------------------------------------------------
+// 20.6 DATA IMPORT/EXPORT LOG MODEL
+// -----------------------------------------------------------------------------
+
+/// Data import/export tracking for admin operations
+model DataImportExportLog {
+  id                  String    @id @default(uuid()) @db.Uuid
+  
+  // Operation type
+  operationType       String    @map("operation_type") @db.VarChar(20) // import, export
+  dataType            String    @map("data_type") @db.VarChar(50) // members, products, categories, etc.
+  
+  // File information
+  fileName            String    @map("file_name") @db.VarChar(255)
+  fileUrl             String?   @map("file_url") @db.VarChar(500)
+  fileSize            Int?      @map("file_size") // bytes
+  fileFormat          String?   @map("file_format") @db.VarChar(20) // csv, xlsx, json
+  
+  // Processing details
+  totalRecords        Int       @map("total_records")
+  successCount        Int       @default(0) @map("success_count")
+  errorCount          Int       @default(0) @map("error_count")
+  warningCount        Int       @default(0) @map("warning_count")
+  skippedCount        Int       @default(0) @map("skipped_count")
+  
+  // Error details
+  errorDetails        Json?     @map("error_details")
+  errorLogUrl         String?   @map("error_log_url") @db.VarChar(500)
+  
+  // Status
+  status              String    @default("pending") @db.VarChar(20) // pending, processing, completed, failed, cancelled
+  
+  // Admin who performed the operation
+  performedByAdminId  String    @map("performed_by_admin_id") @db.Uuid
+  
+  // Timestamps
+  startedAt           DateTime  @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  @@index([operationType])
+  @@index([dataType])
+  @@index([status])
+  @@index([performedByAdminId])
+  @@index([createdAt])
+  @@map("data_import_export_logs")
+}
+
+// -----------------------------------------------------------------------------
+// 20.7 EMAIL TEMPLATE MODEL
+// -----------------------------------------------------------------------------
+
+/// Email templates for system communications
+/// Note: For future use when email functionality is added
+model EmailTemplate {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Template identification
+  templateKey       String    @unique @map("template_key") @db.VarChar(100)
+  templateName      String    @map("template_name") @db.VarChar(150)
+  
+  // Content
+  subject           String    @db.VarChar(200)
+  bodyHtml          String    @map("body_html") @db.Text
+  bodyText          String?   @map("body_text") @db.Text
+  
+  // Variables
+  availableVariables String[] @map("available_variables") // List of placeholder variables
+  
+  // Category
+  category          String    @db.VarChar(50) // verification, notification, marketing, system
+  
+  // Status
+  isActive          Boolean   @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@index([templateKey])
+  @@index([category])
+  @@index([isActive])
+  @@map("email_templates")
+}
+
+// -----------------------------------------------------------------------------
+// 20.8 SCHEDULED JOB MODEL
+// -----------------------------------------------------------------------------
+
+/// Tracking for scheduled/background jobs
+model ScheduledJob {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Job identification
+  jobName           String    @map("job_name") @db.VarChar(100)
+  jobType           String    @map("job_type") @db.VarChar(50) // statistics_calculation, cleanup, notification, backup
+  
+  // Schedule
+  cronExpression    String?   @map("cron_expression") @db.VarChar(50)
+  intervalMinutes   Int?      @map("interval_minutes")
+  
+  // Execution details
+  lastRunAt         DateTime? @map("last_run_at")
+  lastRunStatus     String?   @map("last_run_status") @db.VarChar(20) // success, failed, partial
+  lastRunDuration   Int?      @map("last_run_duration") // milliseconds
+  lastRunMessage    String?   @map("last_run_message") @db.Text
+  nextRunAt         DateTime? @map("next_run_at")
+  
+  // Status
+  isEnabled         Boolean   @default(true) @map("is_enabled")
+  
+  // Statistics
+  totalRuns         Int       @default(0) @map("total_runs")
+  successfulRuns    Int       @default(0) @map("successful_runs")
+  failedRuns        Int       @default(0) @map("failed_runs")
+  
+  // Configuration
+  configuration     Json?     // Job-specific configuration
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([jobName])
+  @@index([jobType])
+  @@index([isEnabled])
+  @@index([nextRunAt])
+  @@map("scheduled_jobs")
+}
+
+// -----------------------------------------------------------------------------
+// 20.9 API KEY MODEL (For future external integrations)
+// -----------------------------------------------------------------------------
+
+/// API keys for external integrations
+model ApiKey {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Key identification
+  name              String    @db.VarChar(100)
+  description       String?   @db.Text
+  
+  // Key value (hashed)
+  keyHash           String    @unique @map("key_hash") @db.VarChar(255)
+  keyPrefix         String    @map("key_prefix") @db.VarChar(20) // First few chars for identification
+  
+  // Permissions
+  permissions       String[]  // List of allowed endpoints/actions
+  
+  // Rate limiting
+  rateLimit         Int       @default(1000) @map("rate_limit") // Requests per hour
+  
+  // Status
+  isActive          Boolean   @default(true) @map("is_active")
+  
+  // Usage tracking
+  lastUsedAt        DateTime? @map("last_used_at")
+  totalRequests     Int       @default(0) @map("total_requests")
+  
+  // Ownership
+  createdByAdminId  String    @map("created_by_admin_id") @db.Uuid
+  
+  // Expiration
+  expiresAt         DateTime? @map("expires_at")
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  revokedAt         DateTime? @map("revoked_at")
+  
+  @@index([keyPrefix])
+  @@index([isActive])
+  @@index([createdByAdminId])
+  @@map("api_keys")
+}
+
+// -----------------------------------------------------------------------------
+// 20.10 FEATURE FLAG MODEL
+// -----------------------------------------------------------------------------
+
+/// Feature flags for gradual rollout and A/B testing
+model FeatureFlag {
+  id                String    @id @default(uuid()) @db.Uuid
+  
+  // Flag identification
+  flagKey           String    @unique @map("flag_key") @db.VarChar(100)
+  flagName          String    @map("flag_name") @db.VarChar(150)
+  description       String?   @db.Text
+  
+  // Status
+  isEnabled         Boolean   @default(false) @map("is_enabled")
+  
+  // Targeting
+  targetPercentage  Int       @default(100) @map("target_percentage") // 0-100
+  targetUserTypes   String[]  @map("target_user_types") // members, clients, all
+  targetStates      String[]  @map("target_states") // Specific states
+  
+  // Configuration
+  configuration     Json?     // Feature-specific configuration
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  enabledAt         DateTime? @map("enabled_at")
+  
+  @@index([flagKey])
+  @@index([isEnabled])
+  @@map("feature_flags")
+}
+
+// ============================================================================
+// SECTION 21: USER PREFERENCES AND SETTINGS
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 21.1 USER PREFERENCE MODEL
+// -----------------------------------------------------------------------------
+
+/// User preferences and settings
+model UserPreference {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  
+  // Notification preferences
+  emailNotifications  Boolean   @default(true) @map("email_notifications")
+  pushNotifications   Boolean   @default(true) @map("push_notifications")
+  
+  // Notification types
+  notifyOnNewRating   Boolean   @default(true) @map("notify_on_new_rating")
+  notifyOnVerification Boolean  @default(true) @map("notify_on_verification")
+  notifyOnEvents      Boolean   @default(true) @map("notify_on_events")
+  notifyOnAnnouncements Boolean @default(true) @map("notify_on_announcements")
+  
+  // Display preferences
+  language            String    @default("en") @db.VarChar(10)
+  theme               String    @default("light") @db.VarChar(20) // light, dark, system
+  currency            String    @default("NGN") @db.VarChar(3)
+  
+  // Privacy preferences
+  showPhoneNumber     Boolean   @default(true) @map("show_phone_number")
+  showEmail           Boolean   @default(false) @map("show_email")
+  showLocation        Boolean   @default(true) @map("show_location")
+  allowRatings        Boolean   @default(true) @map("allow_ratings")
+  
+  // Timestamps
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  @@map("user_preferences")
+}
+
+// -----------------------------------------------------------------------------
+// 21.2 USER SAVED ITEM MODEL
+// -----------------------------------------------------------------------------
+
+/// Saved/Bookmarked items by users
+model UserSavedItem {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  
+  // What is saved
+  itemType          String    @map("item_type") @db.VarChar(50) // member, product, service, tool
+  itemId            String    @map("item_id") @db.Uuid
+  
+  // Optional notes
+  notes             String?   @db.VarChar(255)
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  @@unique([userId, itemType, itemId])
+  @@index([userId])
+  @@index([itemType])
+  @@map("user_saved_items")
+}
+
+// -----------------------------------------------------------------------------
+// 21.3 USER DISMISSED ANNOUNCEMENT MODEL
+// -----------------------------------------------------------------------------
+
+/// Tracking of dismissed announcements per user
+model UserDismissedAnnouncement {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  announcementId    String    @map("announcement_id") @db.Uuid
+  
+  // Timestamp
+  dismissedAt       DateTime  @default(now()) @map("dismissed_at")
+  
+  @@unique([userId, announcementId])
+  @@index([userId])
+  @@map("user_dismissed_announcements")
+}
+
+// ============================================================================
+// SECTION 22: SEED DATA MODELS
+// ============================================================================
+
+// -----------------------------------------------------------------------------
+// 22.1 SEED DATA CATEGORY DEFAULTS
+// -----------------------------------------------------------------------------
+
+/// Pre-defined categories that should be seeded
+/// This is a reference model for documentation - actual seeding done via scripts
+model SeedCategoryReference {
+  id                String        @id @default(uuid()) @db.Uuid
+  categoryCode      String        @unique @map("category_code") @db.VarChar(15)
+  categoryType      CategoryType  @map("category_type")
+  name              String        @db.VarChar(150)
+  description       String?       @db.Text
+  examples          String[]
+  isSeeded          Boolean       @default(false) @map("is_seeded")
+  
+  @@map("seed_category_references")
+}
+
+// ============================================================================
+// END OF SCHEMA
+// ============================================================================
