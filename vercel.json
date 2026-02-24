@@ -1,14 +1,16 @@
 {
-  "builds": [
-    {
-      "src": "src/main.ts",
-      "use": "@vercel/node"
+  "version": 2,
+  "functions": {
+    "src/main.ts": {
+      "runtime": "@vercel/node@3",
+      "memory": 1024,
+      "maxDuration": 30
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "src/main.ts"
+      "source": "/(.*)",
+      "destination": "/src/main.ts"
     }
   ]
 }
