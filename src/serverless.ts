@@ -1,7 +1,7 @@
 // src/serverless.ts
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import express from 'express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -11,9 +11,12 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 const server = express();
 let isInitialized = false;
+const logger = new Logger('Serverless');
 
 export async function createApp() {
   if (isInitialized) return server;
+
+  logger.log('Initializing NestJS application...');
 
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     logger: ['error', 'warn', 'log'],
@@ -46,5 +49,6 @@ export async function createApp() {
   await app.init();
   isInitialized = true;
 
+  logger.log('NestJS application initialized successfully');
   return server;
 }
