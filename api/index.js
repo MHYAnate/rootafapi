@@ -1,37 +1,28 @@
-// api/index.js
-const path = require('path');
-
 let cachedHandler;
 
 module.exports = async (req, res) => {
   try {
     if (!cachedHandler) {
-      // Debug: scan what actually exists at runtime
-      const fs = require('fs');
-      const taskDir = path.join(__dirname, '..');
-      let taskFiles, distFiles;
-
-      try {
-        taskFiles = fs.readdirSync(taskDir).slice(0, 40);
-      } catch (e) {
-        taskFiles = [e.message];
-      }
-
-      try {
-        distFiles = fs.readdirSync(path.join(taskDir, 'dist')).slice(0, 40);
-      } catch (e) {
-        distFiles = [e.message];
-      }
-
       let mod;
+
       try {
-        mod = require('../dist/serverless');
+        // ✅ Now requires from co-located _dist directory
+        mod = require('./_dist/serverless');
       } catch (requireError) {
+        const fs = require('fs');
+        const path = require('path');
+
+        let apiFiles;
+        try {
+          apiFiles = fs.readdirSync(__dirname).slice(0, 30);
+        } catch (e) {
+          apiFiles = [e.message];
+        }
+
         return res.status(500).json({
           phase: 'require',
           error: requireError.message,
-          taskRoot: taskFiles,
-          distContents: distFiles,
+          apiDirContents: apiFiles,
         });
       }
 
