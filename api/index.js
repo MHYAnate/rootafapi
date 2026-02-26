@@ -1,48 +1,53 @@
 // api/index.js
+const path = require('path');
+
 let cachedHandler;
 
 module.exports = async (req, res) => {
   try {
     if (!cachedHandler) {
-      let mod;
+      // Debug: scan what actually exists at runtime
+      const fs = require('fs');
+      const taskDir = path.join(__dirname, '..');
+      let taskFiles, distFiles;
 
       try {
-        mod = require('../dist/serverless');  // ✅ Fixed path
+        taskFiles = fs.readdirSync(taskDir).slice(0, 40);
+      } catch (e) {
+        taskFiles = [e.message];
+      }
+
+      try {
+        distFiles = fs.readdirSync(path.join(taskDir, 'dist')).slice(0, 40);
+      } catch (e) {
+        distFiles = [e.message];
+      }
+
+      let mod;
+      try {
+        mod = require('../dist/serverless');
       } catch (requireError) {
-        console.error('REQUIRE FAILED:', requireError);
-        const fs = require('fs');
-        const path = require('path');
-
-        const distDir = path.join(__dirname, '..', 'dist');
-        let files = [];
-        try {
-          files = fs.readdirSync(distDir).slice(0, 30);
-        } catch (e) {
-          files = ['dist/ directory does not exist'];
-        }
-
         return res.status(500).json({
           phase: 'require',
           error: requireError.message,
-          distFiles: files,
+          taskRoot: taskFiles,
+          distContents: distFiles,
         });
       }
 
       try {
         cachedHandler = await mod.createApp();
       } catch (initError) {
-        console.error('INIT FAILED:', initError);
         return res.status(500).json({
           phase: 'init',
           error: initError.message,
-          stack: initError.stack,
+          stack: initError.stack?.split('\n').slice(0, 10),
         });
       }
     }
 
     return cachedHandler(req, res);
   } catch (runtimeError) {
-    console.error('RUNTIME FAILED:', runtimeError);
     return res.status(500).json({
       phase: 'runtime',
       error: runtimeError.message,

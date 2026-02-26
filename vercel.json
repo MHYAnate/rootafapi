@@ -1,9 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "npx prisma generate && npx nest build",
+  "buildCommand": "npx prisma generate && npx nest build && echo 'BUILD OK' && ls dist/",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{dist,node_modules/.prisma,node_modules/@prisma/client}/**",
+      "includeFiles": [
+        "dist/**",
+        "node_modules/.prisma/**",
+        "node_modules/@prisma/client/**"
+      ],
       "maxDuration": 30
     }
   },
