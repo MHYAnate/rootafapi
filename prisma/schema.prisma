@@ -14,21 +14,7 @@
 // - Transaction tracking (input-based, no payment processing)
 // - About page with leadership, sponsors, testimonials, events
 // - Admin portal with full verification and content management
-//
-// Version: 2.0
-// Date: June 2025
-// IT Number: 8552454
-// ============================================================================
 
-// generator client {
-//   provider        = "prisma-client-js"
-//   previewFeatures = ["fullTextSearchPostgres"]
-// }
-
-// datasource db {
-//   provider = "postgresql"
-//   url      = env("DATABASE_URL")
-// }
 generator client {
   provider = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
