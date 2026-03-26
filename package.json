@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "npx prisma generate && nest build",
+    "build": "npx prisma generate && tsc",
     "vercel-build": "npx prisma generate && nest build",
     "postinstall": "npx prisma generate",
     "start": "nest start",
