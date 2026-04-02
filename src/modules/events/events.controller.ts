@@ -1,4 +1,5 @@
 // src/modules/events/events.controller.ts
+//updated to to fullyy support admin and public endpoints with pagination, filtering, and status management
 import {
   Controller,
   Get,
