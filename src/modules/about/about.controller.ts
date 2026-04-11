@@ -25,4 +25,40 @@ export class AboutController {
 
   @UseGuards(AdminJwtAuthGuard) @Post('objectives') @ApiBearerAuth('admin-jwt')
   createObjective(@Body() data: any) { return this.service.createObjective(data); }
+  // Add these methods inside the existing AboutController class
+
+  // ─── Objectives ───
+  @UseGuards(AdminJwtAuthGuard)
+  @Put('objectives/:id')
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Update an objective' })
+  updateObjective(@Param('id') id: string, @Body() data: any) {
+    return this.service.updateObjective(id, data);
+  }
+
+  @UseGuards(AdminJwtAuthGuard)
+  @Delete('objectives/:id')
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Delete an objective' })
+  deleteObjective(@Param('id') id: string) {
+    return this.service.deleteObjective(id);
+  }
+
+  // ─── Contact ───
+  @UseGuards(AdminJwtAuthGuard)
+  @Put('contact/:id')
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Update contact info' })
+  updateContact(@Param('id') id: string, @Body() data: any) {
+    return this.service.updateContactInfo(id, data);
+  }
+
+  // ─── Social ───
+  @UseGuards(AdminJwtAuthGuard)
+  @Put('social/:id')
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Update social media link' })
+  updateSocial(@Param('id') id: string, @Body() data: any) {
+    return this.service.updateSocialLink(id, data);
+  }
 }

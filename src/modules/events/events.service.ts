@@ -327,26 +327,60 @@ export class EventsService {
     };
   }
 
+
+
   async addGalleryImage(eventId: string, data: any, adminId: string) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-
+  
+    // Clean and type-coerce the data for Prisma
+    const createData: any = {
+      eventId,
+      imageUrl: data.imageUrl,
+      uploadedByAdminId: adminId,
+    };
+  
+    // Optional string fields
+    if (data.caption) createData.caption = String(data.caption);
+    if (data.altText) createData.altText = String(data.altText);
+    if (data.photographer) createData.photographer = String(data.photographer);
+    if (data.originalFileName) createData.originalFileName = String(data.originalFileName);
+  
+    // DateTime field — parse properly
+    if (data.takenAt) {
+      try {
+        createData.takenAt = new Date(data.takenAt);
+      } catch {
+        // Skip invalid dates
+      }
+    }
+  
+    // Number fields
+    if (data.displayOrder !== undefined) {
+      createData.displayOrder = Number(data.displayOrder) || 0;
+    }
+    if (data.fileSize !== undefined) {
+      createData.fileSize = Number(data.fileSize) || null;
+    }
+    if (data.width !== undefined) createData.width = Number(data.width) || null;
+    if (data.height !== undefined) createData.height = Number(data.height) || null;
+  
+    // Boolean fields
+    if (data.isFeatured !== undefined) {
+      createData.isFeatured = Boolean(data.isFeatured);
+    }
+  
     const image = await this.prisma.eventGalleryImage.create({
-      data: {
-        eventId,
-        ...data,
-        uploadedByAdminId: adminId,
-      },
+      data: createData,
     });
-
+  
     return {
       message: 'Image added successfully',
       data: image,
     };
   }
-
   async removeGalleryImage(eventId: string, imageId: string) {
     const image = await this.prisma.eventGalleryImage.findFirst({
       where: { id: imageId, eventId },

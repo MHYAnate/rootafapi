@@ -49,8 +49,68 @@ export class AboutService {
     return { message: 'Objective created', data: obj };
   }
 
-  async updateContactInfo(id: string, data: any) {
-    const contact = await this.prisma.contactInfo.upsert({ where: { id }, update: data, create: { ...data, contactType: data.contactType || 'headquarters' } });
-    return { message: 'Contact updated', data: contact };
-  }
+
+  
+    // ─── Objectives ───
+    async updateObjective(id: string, data: any) {
+      return this.prisma.foundationObjective.update({
+        where: { id },
+        data: {
+          title: data.title,
+          description: data.description,
+          shortDescription: data.shortDescription,
+          iconName: data.iconName,
+          iconUrl: data.iconUrl,
+          displayOrder: data.displayOrder,
+          isDisplayed: data.isDisplayed,
+        },
+      });
+    }
+  
+    async deleteObjective(id: string) {
+      await this.prisma.foundationObjective.delete({ where: { id } });
+      return { message: 'Objective deleted' };
+    }
+  
+    // ─── Contact ───
+    async updateContactInfo(id: string, data: any) {
+      return this.prisma.contactInfo.update({
+        where: { id },
+        data: {
+          label: data.label,
+          address: data.address,
+          landmark: data.landmark,
+          city: data.city,
+          localGovernmentArea: data.localGovernmentArea,
+          state: data.state,
+          country: data.country,
+          postalCode: data.postalCode,
+          phoneNumber1: data.phoneNumber1,
+          phoneNumber2: data.phoneNumber2,
+          phoneNumber3: data.phoneNumber3,
+          whatsappNumber: data.whatsappNumber,
+          email: data.email,
+          alternateEmail: data.alternateEmail,
+          website: data.website,
+          officeHours: data.officeHours,
+          isPrimary: data.isPrimary,
+          isActive: data.isActive,
+        },
+      });
+    }
+  
+    // ─── Social ───
+    async updateSocialLink(id: string, data: any) {
+      return this.prisma.socialMediaLink.update({
+        where: { id },
+        data: {
+          url: data.url,
+          username: data.username,
+          iconName: data.iconName,
+          iconUrl: data.iconUrl,
+          isActive: data.isActive,
+          displayOrder: data.displayOrder,
+        },
+      });
+    }
 }
