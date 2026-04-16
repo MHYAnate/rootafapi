@@ -3,10 +3,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaginationUtil } from '../../common/utils';
 import { Prisma, EventStatus } from '@prisma/client';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class EventsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════
   // PUBLIC METHODS
@@ -232,6 +239,7 @@ export class EventsService {
       },
     });
 
+    this.triggerReindex();
     return {
       message: 'Event created successfully',
       data: event,
@@ -258,6 +266,7 @@ export class EventsService {
       },
     });
 
+    this.triggerReindex();
     return {
       message: 'Event updated successfully',
       data: event,
@@ -280,6 +289,7 @@ export class EventsService {
       },
     });
 
+    this.triggerReindex();
     return {
       message: 'Event published successfully',
       data: event,
@@ -300,6 +310,7 @@ export class EventsService {
         lastUpdatedByAdminId: adminId,
       },
     });
+    this.triggerReindex();
 
     return {
       message: 'Event unpublished successfully',
@@ -321,6 +332,7 @@ export class EventsService {
       },
     });
 
+    this.triggerReindex();
     return {
       message: 'Event status updated successfully',
       data: event,
@@ -376,6 +388,7 @@ export class EventsService {
       data: createData,
     });
   
+    this.triggerReindex();
     return {
       message: 'Image added successfully',
       data: image,
@@ -391,6 +404,7 @@ export class EventsService {
     }
 
     await this.prisma.eventGalleryImage.delete({ where: { id: imageId } });
+    this.triggerReindex();
 
     return { message: 'Image removed successfully' };
   }
@@ -408,6 +422,7 @@ export class EventsService {
       },
     });
 
+    this.triggerReindex();
     return {
       message: 'Agenda item added successfully',
       data: item,
@@ -428,6 +443,7 @@ export class EventsService {
       data,
     });
 
+    this.triggerReindex();
     return {
       message: 'Agenda item updated successfully',
       data: updated,
@@ -445,6 +461,7 @@ export class EventsService {
 
     await this.prisma.eventAgendaItem.delete({ where: { id: itemId } });
 
+    this.triggerReindex();
     return { message: 'Agenda item removed successfully' };
   }
 
@@ -456,6 +473,7 @@ export class EventsService {
 
     await this.prisma.event.delete({ where: { id } });
 
+    this.triggerReindex();
     return { message: 'Event deleted successfully' };
   }
 }

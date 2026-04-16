@@ -6,15 +6,22 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
 import { MESSAGES } from '../../common/constants';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
 
   private async getMemberProfileId(userId: string): Promise<string> {
     const profile = await this.prisma.memberProfile.findUnique({ where: { userId } });
     if (!profile) throw new NotFoundException('Member profile not found');
     return profile.id;
+  }
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
   }
 
   async create(userId: string, dto: CreateProductDto) {
@@ -113,6 +120,7 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+
     return { data: products, meta: PaginationUtil.createMeta(total, query.page || 1, query.limit || 12) };
   }
 
@@ -147,6 +155,7 @@ export class ProductsService {
 
     await this.prisma.product.update({ where: { id }, data: { viewCount: { increment: 1 } } });
 
+
     return { data: product };
   }
 
@@ -170,6 +179,7 @@ export class ProductsService {
       include: { images: true, category: true },
     });
 
+    this.triggerReindex();
     return { message: MESSAGES.PRODUCT.UPDATED, data: updated };
   }
 
@@ -184,6 +194,7 @@ export class ProductsService {
       data: { activeProducts: { decrement: 1 } },
     });
 
+    this.triggerReindex();
     return { message: MESSAGES.PRODUCT.DELETED };
   }
 
@@ -210,6 +221,7 @@ export class ProductsService {
       data: { productId, imageUrl, thumbnailUrl, mediumUrl, isPrimary },
     });
 
+    
     return { message: 'Image added', data: image };
   }
 
@@ -219,6 +231,7 @@ export class ProductsService {
     if (!product) throw new NotFoundException(MESSAGES.PRODUCT.NOT_FOUND);
 
     await this.prisma.productImage.delete({ where: { id: imageId } });
+   
     return { message: 'Image removed' };
   }
 
@@ -236,6 +249,7 @@ export class ProductsService {
       }),
       this.prisma.product.count({ where: { memberId } }),
     ]);
+
 
     return { data: products, meta: PaginationUtil.createMeta(total, query.page || 1, query.limit || 12) };
   }

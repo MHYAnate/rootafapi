@@ -1,12 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaginationUtil } from '../../common/utils';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ingestionService: IngestionService,
+  ) {}
 
-  async findAll(query: { page?: number; limit?: number; userType?: string; status?: string; search?: string }) {
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
+  }
+
+  async findAll(query: {
+    page?: number;
+    limit?: number;
+    userType?: string;
+    status?: string;
+    search?: string;
+  }) {
     const { skip, take } = PaginationUtil.getSkipTake(query.page, query.limit);
     const where: any = {};
     if (query.userType) where.userType = query.userType;
@@ -40,7 +56,11 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { data: users, meta: PaginationUtil.createMeta(total, query.page || 1, query.limit || 12) };
+    // NO reindex here — this is a read operation
+    return {
+      data: users,
+      meta: PaginationUtil.createMeta(total, query.page || 1, query.limit || 12),
+    };
   }
 
   async findOne(id: string) {
@@ -71,6 +91,7 @@ export class UsersService {
       },
     });
     if (!user) throw new NotFoundException('User not found');
+    // NO reindex here — this is a read operation
     return { data: user };
   }
 
@@ -88,6 +109,7 @@ export class UsersService {
       },
     });
 
+    this.triggerReindex(); // YES — data changed
     return { message: 'User suspended successfully' };
   }
 
@@ -101,6 +123,7 @@ export class UsersService {
         suspendedByAdminId: null,
       },
     });
+    this.triggerReindex(); // YES — data changed
     return { message: 'User reactivated successfully' };
   }
 }

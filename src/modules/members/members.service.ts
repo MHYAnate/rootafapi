@@ -4,10 +4,17 @@ import { PaginationUtil } from '../../common/utils';
 import { MemberQueryDto } from './dto/member-query.dto';
 import { UpdateMemberProfileDto } from './dto/update-member-profile.dto';
 import { VerificationStatus, Prisma } from '@prisma/client';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class MembersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
+  }
 
   async findAllPublic(query: MemberQueryDto) {
     const { skip, take } = PaginationUtil.getSkipTake(query.page, query.limit);
@@ -122,6 +129,7 @@ export class MembersService {
       },
     });
 
+    this.triggerReindex();
     return { message: 'Profile updated', data: updated };
   }
 
@@ -130,6 +138,7 @@ export class MembersService {
       where: { userId },
       data: { profilePhotoUrl: photoUrl, profilePhotoThumbnail: thumbnailUrl },
     });
+    this.triggerReindex();
     return { message: 'Profile photo updated' };
   }
 
@@ -158,6 +167,7 @@ export class MembersService {
       include: { category: true },
     });
 
+    this.triggerReindex();
     return { message: 'Specialization added', data: spec };
   }
 
@@ -171,6 +181,7 @@ export class MembersService {
     if (!spec) throw new NotFoundException('Specialization not found');
 
     await this.prisma.memberSpecialization.delete({ where: { id: specId } });
+    this.triggerReindex();
     return { message: 'Specialization removed' };
   }
 

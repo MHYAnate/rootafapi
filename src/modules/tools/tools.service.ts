@@ -5,10 +5,11 @@ import { CreateToolDto } from './dto/create-tool.dto';
 import { UpdateToolDto } from './dto/update-tool.dto';
 import { ToolQueryDto } from './dto/tool-query.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class ToolsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
 
   private async getMemberId(userId: string) {
     const p = await this.prisma.memberProfile.findUnique({
@@ -16,6 +17,12 @@ export class ToolsService {
     });
     if (!p) throw new NotFoundException('Member profile not found');
     return p.id;
+  }
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
   }
 
   async create(userId: string, dto: CreateToolDto) {
@@ -98,6 +105,7 @@ export class ToolsService {
       },
     });
 
+    this.triggerReindex();
     return { message: 'Tool created', data: tool };
   }
 
@@ -164,6 +172,7 @@ export class ToolsService {
       this.prisma.tool.count({ where }),
     ]);
 
+    
     return {
       data: tools,
       meta: PaginationUtil.createMeta(
@@ -208,6 +217,7 @@ export class ToolsService {
       data: { viewCount: { increment: 1 } },
     });
 
+   
     return { data: tool };
   }
 
@@ -224,6 +234,7 @@ export class ToolsService {
       include: { images: true, category: true },
     });
 
+    this.triggerReindex();
     return { message: 'Tool updated', data: updated };
   }
 
@@ -243,6 +254,7 @@ export class ToolsService {
       data: { activeTools: { decrement: 1 } },
     });
 
+    this.triggerReindex();
     return { message: 'Tool deleted' };
   }
 
@@ -270,6 +282,7 @@ export class ToolsService {
       data: { toolId, imageUrl, thumbnailUrl, isPrimary },
     });
 
+   
     return { message: 'Image added', data: img };
   }
 
@@ -281,6 +294,7 @@ export class ToolsService {
     if (!tool) throw new NotFoundException('Tool not found');
 
     await this.prisma.toolImage.delete({ where: { id: imageId } });
+    this.triggerReindex();
     return { message: 'Image removed' };
   }
 

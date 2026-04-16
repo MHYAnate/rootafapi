@@ -33,6 +33,7 @@ import { LocationModule } from './modules/location/location.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module';
 import { HealthModule } from './modules/health/health.module';
+import { AiModule } from './modules/ai/ai.module';
 
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
@@ -70,6 +71,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
     LocationModule,
     AnalyticsModule,
     AdminDashboardModule,
+    AiModule, 
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

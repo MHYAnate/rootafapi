@@ -5,14 +5,22 @@ import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { ServiceQueryDto } from './dto/service-query.dto';
 import { Prisma, VerificationStatus } from '@prisma/client';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
+  }
 
   private async getMemberProfileId(userId: string) {
     const p = await this.prisma.memberProfile.findUnique({ where: { userId } });
     if (!p) throw new NotFoundException('Member profile not found');
+ 
     return p.id;
   }
 
@@ -52,6 +60,7 @@ export class ServicesService {
       where: { id: memberId },
       data: { totalServices: { increment: 1 }, activeServices: { increment: 1 } },
     });
+    this.triggerReindex();
 
     return { message: 'Service created', data: service };
   }
@@ -94,6 +103,7 @@ export class ServicesService {
       this.prisma.service.count({ where }),
     ]);
 
+    
     return { data: services, meta: PaginationUtil.createMeta(total, query.page || 1, query.limit || 12) };
   }
 
@@ -120,6 +130,7 @@ export class ServicesService {
     });
     if (!service) throw new NotFoundException('Service not found');
     await this.prisma.service.update({ where: { id }, data: { viewCount: { increment: 1 } } });
+
     return { data: service };
   }
 
@@ -128,6 +139,7 @@ export class ServicesService {
     const service = await this.prisma.service.findFirst({ where: { id: serviceId, memberId } });
     if (!service) throw new NotFoundException('Service not found');
     const updated = await this.prisma.service.update({ where: { id: serviceId }, data: { ...dto }, include: { images: true, category: true } });
+    this.triggerReindex();
     return { message: 'Service updated', data: updated };
   }
 
@@ -137,6 +149,7 @@ export class ServicesService {
     if (!service) throw new NotFoundException('Service not found');
     await this.prisma.service.update({ where: { id: serviceId }, data: { isActive: false } });
     await this.prisma.memberProfile.update({ where: { id: memberId }, data: { activeServices: { decrement: 1 } } });
+    this.triggerReindex();
     return { message: 'Service deleted' };
   }
 
@@ -146,6 +159,7 @@ export class ServicesService {
     if (!service) throw new NotFoundException('Service not found');
     if (isPrimary) await this.prisma.serviceImage.updateMany({ where: { serviceId }, data: { isPrimary: false } });
     const image = await this.prisma.serviceImage.create({ data: { serviceId, imageUrl, thumbnailUrl, isPrimary } });
+    
     return { message: 'Image added', data: image };
   }
 

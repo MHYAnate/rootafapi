@@ -15,15 +15,31 @@
 // - About page with leadership, sponsors, testimonials, events
 // - Admin portal with full verification and content management
 
+// generator client {
+//   provider = "prisma-client-js"
+//   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+//   previewFeatures = ["postgresqlExtensions"]
+// }
+
+// datasource db {
+//   provider  = "postgresql"
+//   url       = env("DATABASE_URL")
+//   directUrl = env("DIRECT_URL")
+//   extensions = [vector]
+// }
+
 generator client {
-  provider = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  // You must include all the extensions Supabase already created, plus vector
+  extensions = [pg_graphql, pg_stat_statements, pgcrypto, supabase_vault, uuid_ossp, vector]
 }
 
 // ============================================================================
@@ -3489,6 +3505,31 @@ model SeedCategoryReference {
   isSeeded          Boolean       @default(false) @map("is_seeded")
   
   @@map("seed_category_references")
+}
+
+
+
+model SearchEmbedding {
+  id        String   @id @default(uuid()) @db.Uuid
+  
+  // Link this to a Member, Product, Service, or Content Section
+  relatedId String   @map("related_id") @db.VarChar(100) 
+  type      String   @db.VarChar(50) // e.g., "MEMBER", "PRODUCT", "ABOUT_CONTENT", "MARKET_GAP"
+  
+  // The actual text content (needed to feed the LLM during RAG)
+  content   String   @db.Text
+  metadata  Json?    // Extra data like { title: '...', state: '...' }
+  
+  // The vector column (Using 384-dim for all-MiniLM-L6-v2)
+  // Change to vector(768) if you switch to all-mpnet-base-v2
+  embedding Unsupported("vector(384)")?
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([type, relatedId])
+  @@index([type])
+  @@map("search_embeddings")
 }
 
 // ============================================================================

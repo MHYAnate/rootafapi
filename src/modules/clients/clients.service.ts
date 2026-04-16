@@ -1,10 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateClientProfileDto } from './dto/update-client-profile.dto';
+import { IngestionService } from '../ai/ingestion.service';
 
 @Injectable()
 export class ClientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,  private ingestionService: IngestionService,) {}
+
+  private triggerReindex() {
+    this.ingestionService.ingestAll().catch((err) =>
+      console.error('RAG re-indexing failed:', err.message),
+    );
+  }
 
   async getMyProfile(userId: string) {
     const profile = await this.prisma.clientProfile.findUnique({
@@ -37,6 +44,7 @@ export class ClientsService {
       where: { userId },
       data: { ninPhotoUrl, ninPhotoUploadedAt: new Date() },
     });
+    this.triggerReindex();
     return { message: 'NIN photo uploaded' };
   }
 }
