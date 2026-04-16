@@ -1,29 +1,43 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { pipeline } from '@huggingface/transformers';
+import { Injectable, Logger } from '@nestjs/common';
+import { GoogleGenerativeAI, TaskType } from '@google/generative-ai';
 
 @Injectable()
-export class EmbeddingService implements OnModuleInit {
-  private embedder: any = null;
+export class EmbeddingService {
+  private genAI: GoogleGenerativeAI;
   private readonly logger = new Logger(EmbeddingService.name);
+  private readonly MODEL = 'gemini-embedding-001';
+  readonly DIMENSION = 768;
 
-  async onModuleInit() {
-    this.logger.log('Loading HuggingFace embedding model (all-MiniLM-L6-v2)...');
-    // This downloads the model to a local cache on first run (~30MB)
-    this.embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-      dtype: 'fp32',
-    });
-    this.logger.log('HuggingFace embedding model loaded successfully.');
+  constructor() {
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    this.logger.log(`Using Google ${this.MODEL} for embeddings (${this.DIMENSION}-dim)`);
   }
 
   async embed(text: string): Promise<number[]> {
-    if (!this.embedder) throw new Error('Embedding model not loaded yet');
-    
-    const output = await this.embedder(text, {
-      pooling: 'mean',
-      normalize: true,
-    });
+    try {
+      const model = this.genAI.getGenerativeModel({ model: this.MODEL });
+      const result = await model.embedContent({
+        content: { role: 'user', parts: [{ text }] },
+        taskType: TaskType.RETRIEVAL_DOCUMENT,
+      });
+      return result.embedding.values;
+    } catch (error) {
+      this.logger.error(`Embedding failed: ${error.message}`);
+      throw error;
+    }
+  }
 
-    // Returns a 384-dimensional vector
-    return Array.from(output.data) as number[];
+  async embedQuery(text: string): Promise<number[]> {
+    try {
+      const model = this.genAI.getGenerativeModel({ model: this.MODEL });
+      const result = await model.embedContent({
+        content: { role: 'user', parts: [{ text }] },
+        taskType: TaskType.RETRIEVAL_QUERY,
+      });
+      return result.embedding.values;
+    } catch (error) {
+      this.logger.error(`Query embedding failed: ${error.message}`);
+      throw error;
+    }
   }
 }
