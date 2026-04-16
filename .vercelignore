@@ -1,0 +1,8 @@
+# Ignore migrations (they are in the DB, not needed at runtime)
+prisma/migrations
+# Ignore local SQLite DBs if you have any
+*.db
+*.db-journal
+# Ignore documentation or logs
+README.md
+*.log
