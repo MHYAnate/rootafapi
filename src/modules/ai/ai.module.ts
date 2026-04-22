@@ -1,4 +1,4 @@
-// src/modules/ai/ai.module.ts
+// src/modules/ai/ai.module.ts check
 import { Module } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { RagService } from './rag.service';
