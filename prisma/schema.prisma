@@ -3510,21 +3510,19 @@ model SeedCategoryReference {
 
 
 
+
 model SearchEmbedding {
   id        String   @id @default(uuid()) @db.Uuid
-  
-  // Link this to a Member, Product, Service, or Content Section
-  relatedId String   @map("related_id") @db.VarChar(100) 
-  type      String   @db.VarChar(50) // e.g., "MEMBER", "PRODUCT", "ABOUT_CONTENT", "MARKET_GAP"
-  
-  // The actual text content (needed to feed the LLM during RAG)
+
+  relatedId String   @map("related_id") @db.VarChar(100)
+  type      String   @db.VarChar(50)
+
   content   String   @db.Text
-  metadata  Json?    // Extra data like { title: '...', state: '...' }
-  
-  // The vector column (Using 384-dim for all-MiniLM-L6-v2)
-  // Change to vector(768) if you switch to all-mpnet-base-v2
-  embedding Unsupported("vector(384)")?
-  
+  metadata  Json?
+
+  // ✅ FIXED: 768-dim to match gemini-embedding-001
+  embedding Unsupported("vector(768)")?
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -3532,7 +3530,6 @@ model SearchEmbedding {
   @@index([type])
   @@map("search_embeddings")
 }
-
 // ============================================================================
 // END OF SCHEMA
 // ============================================================================
