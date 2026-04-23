@@ -14,7 +14,6 @@ export class IngestionService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // ✅ Validate DB column dimension matches service dimension before any ingest
     const columnOk = await this.validateVectorColumnDimension();
     if (!columnOk) {
       this.logger.error(
@@ -48,10 +47,9 @@ export class IngestionService implements OnModuleInit {
         this.logger.warn(
           'Could not read vector column dimension — proceeding anyway.',
         );
-        return true; // Column might not exist yet; let ingest fail naturally
+        return true;
       }
 
-      // pgvector stores dimension as atttypmod directly
       const dbDimension = result[0].atttypmod;
       const expectedDimension = this.embeddingService.DIMENSION;
 
@@ -72,7 +70,7 @@ export class IngestionService implements OnModuleInit {
       this.logger.warn(
         `Could not validate vector column dimension: ${error.message}`,
       );
-      return true; // Non-fatal — let ingest try
+      return true;
     }
   }
 
@@ -129,6 +127,13 @@ export class IngestionService implements OnModuleInit {
       await this.ingestMarketGapAnalysis(stats);
       await this.ingestSponsors(stats);
 
+      // ── NEW: Ratings ingestion (3 sub-pipelines) ──────────────────────────
+      // These are called AFTER listings because ratings reference products,
+      // services, and members that must already be in context.
+      await this.ingestRatingReviews(stats);
+      await this.ingestMemberRatingSummaries(stats);
+      await this.ingestListingRatingSummaries(stats);
+
       const total = Object.values(stats).reduce((a, b) => a + b, 0);
       this.logger.log(
         `RAG ingestion completed — ${total} total documents indexed.\n` +
@@ -152,7 +157,6 @@ export class IngestionService implements OnModuleInit {
     metadata: any,
     embedding: number[],
   ): Promise<void> {
-    // ✅ Guard: never send wrong-dimension vectors to DB
     if (embedding.length !== this.embeddingService.DIMENSION) {
       throw new Error(
         `Refusing to upsert: got ${embedding.length}-dim vector, ` +
@@ -756,5 +760,400 @@ export class IngestionService implements OnModuleInit {
     } catch {
       this.logger.warn('Sponsor/Partner model not found — skipping.');
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── 13. RATING REVIEWS ───────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // WHAT: Ingests every individual rating that has a written review
+  //       (reviewTitle or reviewText must be non-empty).
+  //
+  // WHY ONLY REVIEWS WITH TEXT:
+  //   A bare numeric rating (e.g., "3 stars") carries no semantic signal
+  //   useful for vector search. The AI can't answer "what do people say about
+  //   John's maize?" from a lone integer. Once a client writes even a single
+  //   sentence we get searchable natural language we can embed.
+  //
+  // DATA SOURCE:
+  //   prisma.rating — the same model CreateRatingDto writes to.
+  //   We join to:
+  //     • client  → user (for the reviewer's name, kept anonymous-friendly)
+  //     • member  → user (for the reviewee's name)
+  //     • product (optional — only present for PRODUCT category ratings)
+  //     • service (optional — only present for SERVICE category ratings)
+  //
+  // UNIQUE KEY STRATEGY:
+  //   relatedId = "review_<rating.id>"
+  //   The "review_" prefix prevents key collisions with the MEMBER / PRODUCT /
+  //   SERVICE documents that already use the raw id as their relatedId.
+  //
+  // TEXT SHAPE (what gets embedded):
+  //   Client review of <member name>
+  //   Category: <PRODUCT | SERVICE | MEMBER>
+  //   [For product: Product: <name>]
+  //   [For service: Service: <name>]
+  //   Overall rating: 4/5
+  //   [Quality: 4/5 | Communication: 5/5 | Value: 3/5 | Timeliness: 4/5]
+  //   [Title: "Great quality maize"]
+  //   Review: "Very fresh produce, delivered on time. Highly recommended."
+  //
+  // METADATA (stored alongside for post-retrieval filtering):
+  //   memberId, ratingCategory, overallRating, productId?, serviceId?,
+  //   hasReviewText (boolean — always true here)
+  //
+  private async ingestRatingReviews(stats: Record<string, number>) {
+    // ── Fetch only ACTIVE ratings that have written text ──────────────────
+    // We check for BOTH reviewTitle and reviewText because either alone is
+    // enough to form meaningful embedded content.
+    const ratings = await this.prisma.rating.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { reviewText:  { not: null } },
+          { reviewTitle: { not: null } },
+        ],
+      },
+      include: {
+        // Reviewer name — kept first-name + last-initial style for privacy
+        client: {
+          include: {
+            user: { select: { fullName: true } },
+          },
+        },
+        // Reviewee name
+        member: {
+          include: {
+            user: { select: { fullName: true } },
+          },
+        },
+        // Only populated when ratingCategory = 'PRODUCT'
+        product: { select: { name: true } },
+        // Only populated when ratingCategory = 'SERVICE'
+        service: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    this.logger.log(`Rating reviews to ingest: ${ratings.length}`);
+
+    for (const r of ratings) {
+      // ── Build the reviewer display name ─────────────────────────────────
+      // We anonymise to "FirstName L." to respect reviewer privacy while
+      // still giving the LLM enough context to say "a client named Jane D."
+      const reviewerFullName = r.client?.user?.fullName ?? 'A client';
+      const reviewerDisplay = this.toAnonymousName(reviewerFullName);
+
+      const memberName = r.member?.user?.fullName ?? 'a member';
+
+      // ── Build sub-rating lines (only include dimensions that were set) ──
+      const subRatings: string[] = [];
+      if (r.qualityRating)       subRatings.push(`Quality: ${r.qualityRating}/5`);
+      if (r.communicationRating) subRatings.push(`Communication: ${r.communicationRating}/5`);
+      if (r.valueRating)         subRatings.push(`Value for Money: ${r.valueRating}/5`);
+      if (r.timelinessRating)    subRatings.push(`Timeliness: ${r.timelinessRating}/5`);
+
+      // ── Compose the embeddable text ──────────────────────────────────────
+      const text = [
+        `Client review of ${memberName} by ${reviewerDisplay}`,
+        `Category: ${r.ratingCategory.replace(/_/g, ' ')}`,
+
+        // Context line — tells the AI WHAT was rated (product/service name)
+        r.product ? `Product reviewed: ${r.product.name}` : '',
+        r.service ? `Service reviewed: ${r.service.name}` : '',
+
+        // Overall star rating in human-readable form
+        `Overall rating: ${r.overallRating}/5 ${this.starsString(r.overallRating)}`,
+
+        // Sub-dimension ratings if present
+        subRatings.length ? `Detailed ratings — ${subRatings.join(' | ')}` : '',
+
+        // The actual written content (the most semantically rich part)
+        r.reviewTitle ? `Title: "${r.reviewTitle}"` : '',
+        r.reviewText  ? `Review: "${r.reviewText}"` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      await this.ingestChunk(
+        'RATING_REVIEW',
+        `review_${r.id}`,   // ← namespaced so it never collides with MEMBER/PRODUCT ids
+        text,
+        {
+          memberId:       r.memberId,
+          ratingCategory: r.ratingCategory,
+          overallRating:  r.overallRating,
+          productId:      r.productId  ?? null,
+          serviceId:      r.serviceId  ?? null,
+          hasReviewText:  true,
+        },
+        stats,
+      );
+    }
+
+    this.logger.log(
+      `Rating reviews ingested: ${stats['RATING_REVIEW'] ?? 0}`,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── 14. MEMBER RATING SUMMARIES ──────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // WHAT: One document per verified member that summarises their full rating
+  //       profile using the denormalized stats already on MemberProfile.
+  //
+  // WHY SEPARATE FROM MEMBER PROFILE:
+  //   The MEMBER document (section 5) focuses on what a member offers
+  //   (specialisations, bio, products/service count). This MEMBER_RATING
+  //   document focuses entirely on HOW WELL they are regarded, enabling
+  //   queries like "who are the highest-rated maize sellers in Kano?" to
+  //   hit a dedicated, tightly-scoped vector rather than a general profile.
+  //
+  // UNIQUE KEY STRATEGY:
+  //   relatedId = "rating_summary_<memberProfile.id>"
+  //   Prefix prevents collision with the MEMBER document for the same id.
+  //
+  // TEXT SHAPE:
+  //   Rating summary for <name>:
+  //   Overall: 4.7/5 ★★★★★ (23 ratings)
+  //   Star breakdown: ★5 → 15 | ★4 → 5 | ★3 → 2 | ★2 → 1 | ★1 → 0
+  //   Sentiment: Excellent (≥4.5) / Good (≥3.5) / Mixed / Low / No ratings yet
+  //
+  private async ingestMemberRatingSummaries(stats: Record<string, number>) {
+    // Only members with at least one rating — avoids noise from empty docs.
+    const members = await this.prisma.memberProfile.findMany({
+      where: {
+        isProfileComplete: true,
+        totalRatings: { gt: 0 },
+        user: { verificationStatus: 'VERIFIED' },
+      },
+      include: {
+        user: { select: { fullName: true } },
+      },
+    });
+
+    this.logger.log(`Member rating summaries to ingest: ${members.length}`);
+
+    for (const m of members) {
+      const avg = Number(m.averageRating);
+      const total = m.totalRatings;
+
+      // ── Star breakdown using the denormalized counters ───────────────────
+      // These are kept in sync by RatingsService.updateMemberRating() which
+      // runs inside the same Postgres transaction as every new rating write.
+      const breakdown = [
+        `★5 → ${m.fiveStarCount  ?? 0}`,
+        `★4 → ${m.fourStarCount  ?? 0}`,
+        `★3 → ${m.threeStarCount ?? 0}`,
+        `★2 → ${m.twoStarCount   ?? 0}`,
+        `★1 → ${m.oneStarCount   ?? 0}`,
+      ].join(' | ');
+
+      // ── Human-readable sentiment label ───────────────────────────────────
+      const sentiment = this.ratingToSentiment(avg);
+
+      const text = [
+        `Rating summary for ${m.user.fullName}:`,
+        `Overall: ${avg.toFixed(1)}/5 ${this.starsString(Math.round(avg))} (${total} rating${total !== 1 ? 's' : ''})`,
+        `Star breakdown: ${breakdown}`,
+        `Sentiment: ${sentiment}`,
+        `Provider type: ${m.providerType}`,
+        `Location: ${m.localGovernmentArea ?? ''}, ${m.state ?? ''}`.trim().replace(/^,\s*/, ''),
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      await this.ingestChunk(
+        'MEMBER_RATING',
+        `rating_summary_${m.id}`,
+        text,
+        {
+          memberId:     m.id,
+          memberName:   m.user.fullName,
+          avgRating:    avg,
+          totalRatings: total,
+          state:        m.state,
+          providerType: m.providerType,
+        },
+        stats,
+      );
+    }
+
+    this.logger.log(
+      `Member rating summaries ingested: ${stats['MEMBER_RATING'] ?? 0}`,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── 15. LISTING RATING SUMMARIES (Products & Services) ───────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // WHAT: One document per rated product and one per rated service, focused
+  //       purely on rating data (not the listing description, which is already
+  //       in the PRODUCT / SERVICE documents).
+  //
+  // WHY:
+  //   When a user asks "what are the best-rated tomatoes under ₦5,000?"
+  //   the AI benefits from a dedicated rating vector for each product rather
+  //   than having to parse a rating line buried inside a full product document.
+  //   Keeping them separate also means changes in ratings (frequent) don't
+  //   force re-embedding of unchanged product descriptions.
+  //
+  // UNIQUE KEY STRATEGY:
+  //   Products → "prod_rating_<product.id>"
+  //   Services → "svc_rating_<service.id>"
+  //
+  // TEXT SHAPE (product example):
+  //   Product rating summary: Fresh Tomatoes
+  //   Seller: John Doe | Category: Vegetables | Location: Kano, Kano State
+  //   Rating: 4.3/5 ★★★★☆ (12 ratings)
+  //
+  private async ingestListingRatingSummaries(stats: Record<string, number>) {
+    // ── Products with at least one rating ────────────────────────────────
+    const products = await this.prisma.product.findMany({
+      where: {
+        isActive: true,
+        isApproved: true,
+        totalRatings: { gt: 0 },
+      },
+      include: {
+        member: { include: { user: { select: { fullName: true } } } },
+        category: true,
+      },
+    });
+
+    this.logger.log(`Product rating summaries to ingest: ${products.length}`);
+
+    for (const p of products) {
+      const avg = Number(p.averageRating);
+      const text = [
+        `Product rating summary: ${p.name}`,
+        `Seller: ${p.member.user.fullName}`,
+        `Category: ${p.category.name}`,
+        `Location: ${p.member.localGovernmentArea}, ${p.member.state}`,
+        `Rating: ${avg.toFixed(1)}/5 ${this.starsString(Math.round(avg))} (${p.totalRatings} rating${p.totalRatings !== 1 ? 's' : ''})`,
+        `Sentiment: ${this.ratingToSentiment(avg)}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      await this.ingestChunk(
+        'PRODUCT_RATING',
+        `prod_rating_${p.id}`,
+        text,
+        {
+          productId:    p.id,
+          productName:  p.name,
+          category:     p.category.name,
+          state:        p.member.state,
+          avgRating:    avg,
+          totalRatings: p.totalRatings,
+        },
+        stats,
+      );
+    }
+
+    this.logger.log(
+      `Product rating summaries ingested: ${stats['PRODUCT_RATING'] ?? 0}`,
+    );
+
+    // ── Services with at least one rating ────────────────────────────────
+    const services = await this.prisma.service.findMany({
+      where: {
+        isActive: true,
+        isApproved: true,
+        totalRatings: { gt: 0 },
+      },
+      include: {
+        member: { include: { user: { select: { fullName: true } } } },
+        category: true,
+      },
+    });
+
+    this.logger.log(`Service rating summaries to ingest: ${services.length}`);
+
+    for (const s of services) {
+      const avg = Number(s.averageRating);
+      const text = [
+        `Service rating summary: ${s.name}`,
+        `Provider: ${s.member.user.fullName}`,
+        `Category: ${s.category.name}`,
+        `Location: ${s.member.localGovernmentArea}, ${s.member.state}`,
+        `Rating: ${avg.toFixed(1)}/5 ${this.starsString(Math.round(avg))} (${s.totalRatings} rating${s.totalRatings !== 1 ? 's' : ''})`,
+        `Sentiment: ${this.ratingToSentiment(avg)}`,
+        s.completedJobsCount
+          ? `Completed jobs: ${s.completedJobsCount}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      await this.ingestChunk(
+        'SERVICE_RATING',
+        `svc_rating_${s.id}`,
+        text,
+        {
+          serviceId:    s.id,
+          serviceName:  s.name,
+          category:     s.category.name,
+          state:        s.member.state,
+          avgRating:    avg,
+          totalRatings: s.totalRatings,
+        },
+        stats,
+      );
+    }
+
+    this.logger.log(
+      `Service rating summaries ingested: ${stats['SERVICE_RATING'] ?? 0}`,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── Private utility helpers ───────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Converts a full name to an anonymised display like "Jane D."
+   * Protects reviewer privacy while still being human-readable in AI output.
+   */
+  private toAnonymousName(fullName: string): string {
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0]; // single-word name — use as-is
+    const firstName = parts[0];
+    const lastInitial = parts[parts.length - 1][0].toUpperCase();
+    return `${firstName} ${lastInitial}.`;
+  }
+
+  /**
+   * Converts an integer 1–5 into a Unicode star string.
+   * e.g. 4 → "★★★★☆"
+   * Used in embedded text so the LLM can pattern-match star ratings
+   * from natural language like "four-star sellers".
+   */
+  private starsString(rating: number): string {
+    const filled = Math.min(Math.max(Math.round(rating), 0), 5);
+    return '★'.repeat(filled) + '☆'.repeat(5 - filled);
+  }
+
+  /**
+   * Maps an average rating to a qualitative sentiment label.
+   * Allows the AI to respond to questions like "who are the well-regarded
+   * providers?" without having to reason about raw decimals.
+   *
+   * Thresholds:
+   *   ≥ 4.5 → Excellent
+   *   ≥ 3.5 → Good
+   *   ≥ 2.5 → Mixed
+   *   ≥ 1.0 → Below average
+   *     0   → No ratings yet
+   */
+  private ratingToSentiment(avg: number): string {
+    if (avg >= 4.5) return 'Excellent';
+    if (avg >= 3.5) return 'Good';
+    if (avg >= 2.5) return 'Mixed';
+    if (avg >= 1.0) return 'Below average';
+    return 'No ratings yet';
   }
 }

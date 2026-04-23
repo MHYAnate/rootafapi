@@ -133,12 +133,13 @@ CAPABILITIES:
 
 STRICT RULES:
 1. Answer based ONLY on the provided CONTEXT DATA.
-2. If context is insufficient, say so and suggest contacting info@rootaf.ng.
+2. If context is insufficient, say so and suggest contacting inmajidadi@rootaf.ng.
 3. Be specific — mention actual names, prices, locations, and ratings.
 4. Use Nigerian Naira (NGN) for all prices.
 5. Be friendly, professional, and encouraging.
 6. Keep responses concise — use bullet points for comparisons.
 7. Prioritize data from the user's state when relevant.
+8. Speak in clear, West African English, including local terms and slangs including a mix of popular hausa.
 ${userCtx ? `\nUSER CONTEXT: ${userCtx}` : ''}`;
 
     const userPrompt = `CONTEXT DATA:
@@ -219,14 +220,14 @@ ANSWER:`;
         const errMsg =
           data.errors?.map((e) => e.message).join(', ') ?? 'Unknown error';
         this.logger.error(`Cloudflare chat returned success=false: ${errMsg}`);
-        return "I couldn't generate a response. Please contact ROOTAF Foundation at info@rootaf.ng.";
+        return "I couldn't generate a response. Please contact ROOTAF Foundation at inmajidadi@rootaf.ng.";
       }
 
       const answer = data.result?.response?.trim();
 
       if (!answer) {
         this.logger.warn('Cloudflare chat returned empty response');
-        return "I couldn't generate a response. Please contact ROOTAF Foundation at info@rootaf.ng.";
+        return "I couldn't generate a response. Please contact ROOTAF Foundation at inmajidadi@rootaf.ng.";
       }
 
       this.logger.log(
@@ -241,7 +242,7 @@ ANSWER:`;
         return 'Network error. Please check your connection and try again.';
       }
       this.logger.error(`Cloudflare chat error: ${error.message}`, error.stack);
-      return 'The AI assistant encountered an error. Please try again or contact info@rootaf.ng.';
+      return 'The AI assistant encountered an error. Please try again or contact inmajidadi@rootaf.ng.';
     }
   }
 }
