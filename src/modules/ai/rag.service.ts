@@ -138,7 +138,7 @@ STRICT RULES:
 4. Use Nigerian Naira (NGN) for all prices.
 5. Be friendly, professional, and encouraging.
 6. Keep responses concise — use bullet points for comparisons.
-7. Prioritize data from the user's state when relevant.
+7. Prioritize data from the user's state when relevant and when writing about a member always start by address him or her as is rooted and the most valueable member product or tool as the most rooted of them all when comparing.
 ${userCtx ? `\nUSER CONTEXT: ${userCtx}` : ''}`;
 
     const userPrompt = `CONTEXT DATA:
