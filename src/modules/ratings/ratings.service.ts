@@ -1,7 +1,6 @@
 // src/modules/ratings/ratings.service.ts
 import {
   Injectable,
-  NotFoundException,
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
@@ -10,13 +9,15 @@ import { CreateRatingDto } from './dto/create-rating.dto';
 import { PaginationUtil } from '../../common/utils';
 import { VerificationStatus, Prisma } from '@prisma/client';
 import { IngestionService } from '../ai/ingestion.service';
-// Use Prisma's own transaction client type so helpers stay type-safe
-// whether called inside or outside a transaction.
+
 type TxClient = Prisma.TransactionClient;
 
 @Injectable()
 export class RatingsService {
-  constructor(private prisma: PrismaService, private ingestionService: IngestionService,) {}
+  constructor(
+    private prisma: PrismaService,
+    private ingestionService: IngestionService,
+  ) {}
 
   private triggerReindex() {
     this.ingestionService.ingestAll().catch((err) =>
@@ -24,9 +25,10 @@ export class RatingsService {
     );
   }
 
+  // ── Create ─────────────────────────────────────────────────────────────────
+
   async create(userId: string, dto: CreateRatingDto) {
-    // ── 1. Verify the caller is a verified client ──────────────────────────
-    // Single query – fetch user + clientProfile together to avoid N+1.
+    // 1. Verify the caller is a verified client
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { clientProfile: true },
@@ -39,87 +41,72 @@ export class RatingsService {
     if (!user.clientProfile)
       throw new ForbiddenException('Client profile required');
 
-    // ── 2. Duplicate guard (explicit check for a clear 409 message) ────────
-    // The DB unique constraint on (clientId, memberId, ratingCategory,
-    // productId, serviceId) would also catch this, but throwing
-    // ConflictException here gives a friendlier error than a raw P2002.
+    // 2. Duplicate guard
+    // For TOOL_LEASE_RATING the uniqueness is (clientId, memberId, ratingCategory)
+    // since the Rating model has no toolId column.
     const existing = await this.prisma.rating.findFirst({
       where: {
-        clientId: user.clientProfile.id,
-        memberId: dto.memberId,
+        clientId:       user.clientProfile.id,
+        memberId:       dto.memberId,
         ratingCategory: dto.ratingCategory,
-        productId: dto.productId ?? null,
-        serviceId: dto.serviceId ?? null,
+        // Only add productId / serviceId to the where clause when they are
+        // actually present — the Rating table has those columns but NOT toolId.
+        ...(dto.productId ? { productId: dto.productId } : { productId: null }),
+        ...(dto.serviceId ? { serviceId: dto.serviceId } : { serviceId: null }),
       },
     });
     if (existing) throw new ConflictException('You have already rated this');
 
-    // ── 3. Atomic write: insert + all stat updates in one transaction ──────
-    //
-    // FIX: previously the rating row was committed first, then the three
-    // stat-update helpers were awaited sequentially outside any transaction.
-    // If updateMemberRating (or either of the conditional helpers) threw,
-    // the Rating row was left committed but the denormalized counters on
-    // MemberProfile / Product / Service became permanently stale.
-    //
-    // prisma.$transaction(callback) runs everything inside a single
-    // Postgres transaction. Any unhandled error inside the callback causes
-    // an automatic ROLLBACK, so either all five writes succeed together or
-    // none of them do.
+    // 3. Atomic write
     const rating = await this.prisma.$transaction(async (tx) => {
       const created = await tx.rating.create({
         data: {
-          clientId: user.clientProfile!.id,
-          memberId: dto.memberId,
-          ratingCategory: dto.ratingCategory,
-          productId: dto.productId,
-          serviceId: dto.serviceId,
-          overallRating: dto.overallRating,
-          qualityRating: dto.qualityRating,
+          clientId:            user.clientProfile!.id,
+          memberId:            dto.memberId,
+          ratingCategory:      dto.ratingCategory,
+          // Only write columns that exist on the Rating model
+          ...(dto.productId && { productId: dto.productId }),
+          ...(dto.serviceId && { serviceId: dto.serviceId }),
+          // toolId is intentionally omitted — column does not exist in schema
+          overallRating:       dto.overallRating,
+          qualityRating:       dto.qualityRating,
           communicationRating: dto.communicationRating,
-          valueRating: dto.valueRating,
-          timelinessRating: dto.timelinessRating,
-          reviewTitle: dto.reviewTitle,
-          reviewText: dto.reviewText,
+          valueRating:         dto.valueRating,
+          timelinessRating:    dto.timelinessRating,
+          reviewTitle:         dto.reviewTitle,
+          reviewText:          dto.reviewText,
         },
       });
 
-      // Member stats always recalculated (mandatory).
+      // Member stats — always recalculate
       await this.updateMemberRating(dto.memberId, tx);
 
-      // Product / service stats only when the rating targets one.
+      // Entity-level stats — only when a specific entity is targeted
       if (dto.productId) await this.updateProductRating(dto.productId, tx);
       if (dto.serviceId) await this.updateServiceRating(dto.serviceId, tx);
+      // Tool stats are reflected through the member's overall rating aggregate
+      // since there is no toolId FK on Rating. Per-tool stats would require a
+      // schema migration to add a toolId column to the Rating table.
 
       return created;
     });
 
     this.triggerReindex();
-
     return { message: 'Rating submitted', data: rating };
   }
 
-  // ── Private stat-recalculation helpers ────────────────────────────────────
-  //
-  // Each helper now accepts a `tx` parameter (Prisma.TransactionClient).
-  // When called from inside $transaction they share the same connection and
-  // transaction context. This also makes them independently testable by
-  // passing a mock or a test transaction client.
-
- 
+  // ── Stat helpers ────────────────────────────────────────────────────────────
 
   private async updateMemberRating(memberId: string, tx: TxClient) {
-    // One aggregate for average + total, one groupBy for per-star counts.
-    // Both filter to ACTIVE so hidden/removed ratings don't skew the stats.
     const [agg, counts] = await Promise.all([
       tx.rating.aggregate({
-        where: { memberId, status: 'ACTIVE' },
-        _avg: { overallRating: true },
+        where:  { memberId, status: 'ACTIVE' },
+        _avg:   { overallRating: true },
         _count: { overallRating: true },
       }),
       tx.rating.groupBy({
-        by: ['overallRating'],
-        where: { memberId, status: 'ACTIVE' },
+        by:     ['overallRating'],
+        where:  { memberId, status: 'ACTIVE' },
         _count: true,
       }),
     ]);
@@ -132,59 +119,59 @@ export class RatingsService {
     await tx.memberProfile.update({
       where: { id: memberId },
       data: {
-        averageRating: agg._avg.overallRating ?? 0,
-        totalRatings: agg._count.overallRating,
-        oneStarCount: starCounts[1],
-        twoStarCount: starCounts[2],
+        averageRating:  agg._avg.overallRating ?? 0,
+        totalRatings:   agg._count.overallRating,
+        oneStarCount:   starCounts[1],
+        twoStarCount:   starCounts[2],
         threeStarCount: starCounts[3],
-        fourStarCount: starCounts[4],
-        fiveStarCount: starCounts[5],
+        fourStarCount:  starCounts[4],
+        fiveStarCount:  starCounts[5],
       },
     });
   }
 
   private async updateProductRating(productId: string, tx: TxClient) {
     const agg = await tx.rating.aggregate({
-      where: { productId, status: 'ACTIVE' },
-      _avg: { overallRating: true },
+      where:  { productId, status: 'ACTIVE' },
+      _avg:   { overallRating: true },
       _count: { overallRating: true },
     });
     await tx.product.update({
       where: { id: productId },
       data: {
         averageRating: agg._avg.overallRating ?? 0,
-        totalRatings: agg._count.overallRating,
+        totalRatings:  agg._count.overallRating,
       },
     });
   }
 
   private async updateServiceRating(serviceId: string, tx: TxClient) {
     const agg = await tx.rating.aggregate({
-      where: { serviceId, status: 'ACTIVE' },
-      _avg: { overallRating: true },
+      where:  { serviceId, status: 'ACTIVE' },
+      _avg:   { overallRating: true },
       _count: { overallRating: true },
     });
     await tx.service.update({
       where: { id: serviceId },
       data: {
         averageRating: agg._avg.overallRating ?? 0,
-        totalRatings: agg._count.overallRating,
+        totalRatings:  agg._count.overallRating,
       },
     });
-    
   }
 
-  // ── Read methods (unchanged) ───────────────────────────────────────────────
+  // ── Read methods ────────────────────────────────────────────────────────────
 
   async findByMember(memberId: string, page = 1, limit = 12) {
     const { skip, take } = PaginationUtil.getSkipTake(page, limit);
     const [ratings, total] = await Promise.all([
       this.prisma.rating.findMany({
-        where: { memberId, status: 'ACTIVE' },
+        where:   { memberId, status: 'ACTIVE' },
         include: {
-          client: { include: { user: { select: { fullName: true } } } },
+          client:  { include: { user: { select: { fullName: true } } } },
           product: { select: { name: true } },
           service: { select: { name: true } },
+          // 'tool' relation omitted — not in the Rating model
         },
         skip,
         take,
@@ -197,21 +184,31 @@ export class RatingsService {
 
   async getMyRatingsGiven(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where:   { id: userId },
       include: { clientProfile: true },
     });
     if (!user?.clientProfile) return { data: [] };
+
     const ratings = await this.prisma.rating.findMany({
-      where: { clientId: user.clientProfile.id },
-      include: { member: { include: { user: { select: { fullName: true } } } } },
+      where:   { clientId: user.clientProfile.id },
+      include: {
+        member:  { include: { user: { select: { fullName: true } } } },
+        product: { select: { name: true } },
+        service: { select: { name: true } },
+        // 'tool' omitted — not in Rating model
+      },
       orderBy: { createdAt: 'desc' },
     });
     return { data: ratings };
   }
 
   async getMyRatingsReceived(userId: string, page = 1, limit = 12) {
-    const profile = await this.prisma.memberProfile.findUnique({ where: { userId } });
-    if (!profile) return { data: [], meta: PaginationUtil.createMeta(0, 1, 12) };
+    const profile = await this.prisma.memberProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) {
+      return { data: [], meta: PaginationUtil.createMeta(0, 1, 12) };
+    }
     return this.findByMember(profile.id, page, limit);
   }
 }
